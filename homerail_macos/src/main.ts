@@ -33,6 +33,7 @@ let kwsTestMode = false
 let kwsAudioLevel = 0
 let systemOutput: SystemOutputSnapshot = { label: '系统默认输出', transport: 'unknown' }
 let systemOutputTimer: NodeJS.Timeout | null = null
+let codexStatusTimer: NodeJS.Timeout | null = null
 let inputDevices: MikoAppStatus['inputDevices'] = []
 let codexLoggedIn = false
 let codexLiveSupported = false
@@ -400,6 +401,7 @@ async function startApplication(): Promise<void> {
   createTray()
   await refreshSystemOutput()
   systemOutputTimer = setInterval(() => void refreshSystemOutput(), 5_000)
+  codexStatusTimer = setInterval(() => void refreshCodexStatus(), 5_000)
   if (settingsStore.snapshot.startAtLogin) app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })
   emitStatus()
   await runtime.start()
@@ -420,6 +422,8 @@ app.on('before-quit', event => {
   quitting = true
   if (systemOutputTimer) clearInterval(systemOutputTimer)
   systemOutputTimer = null
+  if (codexStatusTimer) clearInterval(codexStatusTimer)
+  codexStatusTimer = null
   codexAuthProcess?.kill('SIGTERM')
   void Promise.all([kws?.stop(), runtime?.stop()]).finally(() => app.exit(0))
 })

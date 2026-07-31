@@ -13,6 +13,7 @@ type MikoApi = {
   startWakeListening: () => Promise<any>
   startKwsTest: () => Promise<any>
   pauseWakeListening: () => Promise<any>
+  openHomeRail: () => Promise<void>
   openSoundSettings: () => Promise<void>
   onEvent: (listener: (event: any) => void) => () => void
 }
@@ -239,6 +240,7 @@ onUnmounted(() => unsubscribe?.())
             <h2 class="mb-2 font-medium">3. Codex 登录</h2>
             <p class="text-xs text-[var(--hr-text-3)]">状态：{{ !status?.codexLoggedIn ? '未登录' : !status?.codexLiveSupported ? '已登录，但当前版本不支持 GPT Live' : status?.codexLiveEffective ? '已登录，GPT Live 配置已生效' : '已登录，请先在 HomeRail 中启用 Codex GPT Live' }}</p>
             <button class="mt-3 rounded-lg border border-[var(--hr-border)] px-3 py-2 text-sm disabled:opacity-45" :disabled="startingAuth || status?.codexLoggedIn" @click="startAuth">{{ startingAuth ? '启动中…' : status?.codexLoggedIn ? '已完成登录' : '开始设备登录' }}</button>
+            <button v-if="status?.codexLoggedIn && status?.codexLiveSupported && !status?.codexLiveEffective" class="ml-2 rounded-lg border border-[var(--hr-border)] px-3 py-2 text-sm" @click="api()?.openHomeRail()">打开 HomeRail GPT Live 设置</button>
             <pre v-if="authOutput" class="mt-3 max-h-24 overflow-auto whitespace-pre-wrap rounded-lg bg-black/20 p-2 text-[11px] text-[var(--hr-text-3)]">{{ authOutput }}</pre>
           </div>
         </div>
