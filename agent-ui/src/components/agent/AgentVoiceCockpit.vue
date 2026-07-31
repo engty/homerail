@@ -3969,6 +3969,9 @@ async function startCodexLiveVoice(): Promise<void> {
   const sessionId = workspace.value?.session_id
   if (!sessionId || !codexLiveVoiceEffective.value) return
   if (codexLiveVoiceClient) await stopCodexLiveVoice(false)
+  const desktop = mikoDesktopApi()
+  // Release the local wake-word stream before Chromium requests the live input.
+  await desktop?.pauseWakeListening?.()
   clearMikoSilenceTimer()
   closeVoiceInputAfterSubmit()
   voiceTurnAbort?.abort()
@@ -3993,12 +3996,15 @@ async function startCodexLiveVoice(): Promise<void> {
   codexLiveVoiceClient = client
   try {
     await client.start()
+    await desktop?.setLiveSessionActive?.(true)
   } catch (err: any) {
     if (codexLiveVoiceClient !== client) return
     codexLiveVoiceClient = null
+    await client.stop(false).catch(() => undefined)
     stopCodexLiveVoiceMeter()
     applyCodexLiveVoiceState('error')
     error.value = err?.message || t('voice.liveVoice.error')
+    void desktop?.endConversation?.().catch(() => undefined)
   }
 }
 

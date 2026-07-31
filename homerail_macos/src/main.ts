@@ -38,6 +38,7 @@ let inputDevices: MikoAppStatus['inputDevices'] = []
 let codexLoggedIn = false
 let codexLiveSupported = false
 let codexLiveEffective = false
+let liveSessionActive = false
 let codexAuthProcess: ChildProcess | null = null
 let quitting = false
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
@@ -68,6 +69,7 @@ function getStatus(): MikoAppStatus {
   let lifecycle: MikoAppStatus['lifecycle'] = 'paused'
   if (!settings.onboardingComplete) lifecycle = 'setup-required'
   else if (runtimeStatus.state === 'error' || runtimeStatus.state === 'unavailable' || kwsState === 'error') lifecycle = 'error'
+  else if (liveSessionActive) lifecycle = 'live-listening'
   else if (kwsState === 'listening') lifecycle = 'listening'
   else if (kwsState === 'wake-detected') lifecycle = 'wake-detected'
   return {
@@ -81,6 +83,7 @@ function getStatus(): MikoAppStatus {
     codexLoggedIn,
     codexLiveSupported,
     codexLiveEffective,
+    liveSessionActive,
     kwsState,
     kwsTestMode,
     kwsAudioLevel,
@@ -105,6 +108,8 @@ function refreshTray(): void {
     ? '需要完成首次设置'
     : status.lifecycle === 'error'
       ? '运行时错误'
+      : status.liveSessionActive
+        ? 'GPT Live 对话中（麦克风已占用）'
       : status.settings.listeningEnabled
         ? kwsState === 'listening' ? '正在监听“米可”' : '已暂停（等待唤醒设置）'
         : '已暂停'
@@ -133,6 +138,7 @@ function requestEndConversation(): void {
 }
 
 async function endConversation(): Promise<MikoAppStatus> {
+  liveSessionActive = false
   kwsTestMode = false
   kwsState = 'paused'
   await kws.pause()
@@ -237,6 +243,7 @@ async function startWakeListening(): Promise<MikoAppStatus> {
   const model = modelManager.status()
   if (!model.installed) throw new Error('请先下载并确认 Miko 离线唤醒模型')
   if (microphonePermission() === 'denied' || microphonePermission() === 'restricted') throw new Error('macOS 麦克风权限未授予')
+  liveSessionActive = false
   kwsTestMode = false
   await kws.configure(model.modelDir, settings.inputDevice.nativeDeviceId, settings.sensitivity)
   await kws.startListening()
@@ -262,6 +269,17 @@ async function startKwsTest(): Promise<MikoAppStatus> {
     kwsTestMode = false
     throw error
   }
+}
+
+async function setLiveSessionActive(active: boolean): Promise<MikoAppStatus> {
+  if (active) {
+    await kws.pause()
+    kwsTestMode = false
+    kwsState = 'paused'
+  }
+  liveSessionActive = active
+  emitStatus()
+  return getStatus()
 }
 
 async function pauseWakeListening(): Promise<MikoAppStatus> {
@@ -364,6 +382,7 @@ function setupIpc(): void {
   })
   ipcMain.handle('miko:start-wake-listening', () => startWakeListening())
   ipcMain.handle('miko:start-kws-test', () => startKwsTest())
+  ipcMain.handle('miko:set-live-active', (_event, active: boolean) => setLiveSessionActive(Boolean(active)))
   ipcMain.handle('miko:pause-wake-listening', () => pauseWakeListening())
   ipcMain.handle('miko:end-conversation', () => endConversation())
   ipcMain.handle('miko:start-codex-auth', () => startCodexAuth())

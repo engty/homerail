@@ -52,6 +52,7 @@ export interface MikoAppStatus {
   codexLoggedIn: boolean
   codexLiveSupported: boolean
   codexLiveEffective: boolean
+  liveSessionActive: boolean
   kwsState: 'unavailable' | 'paused' | 'listening' | 'wake-detected' | 'error'
   kwsTestMode: boolean
   kwsAudioLevel: number
@@ -80,6 +81,7 @@ export interface MikoDesktopApi {
   installWakeModel(confirmedSourceTerms: boolean): Promise<{ installed: boolean; modelDir?: string; message?: string }>
   startWakeListening(): Promise<MikoAppStatus>
   startKwsTest(): Promise<MikoAppStatus>
+  setLiveSessionActive(active: boolean): Promise<MikoAppStatus>
   pauseWakeListening(): Promise<MikoAppStatus>
   endConversation(): Promise<MikoAppStatus>
   startCodexAuth(): Promise<{ started: boolean; message: string }>

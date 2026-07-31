@@ -116,6 +116,22 @@ describe('AgentVoiceCockpit responsive layout', () => {
     expect(applyState).toContain("broadcastVoiceActivity('listening')")
   })
 
+  it('hands the desktop microphone from wake detection to GPT Live', () => {
+    const startLive = cockpitSource.slice(
+      cockpitSource.indexOf('async function startCodexLiveVoice(): Promise<void>'),
+      cockpitSource.indexOf('async function stopCodexLiveVoice('),
+    )
+    expect(startLive).toContain('await desktop?.pauseWakeListening?.()')
+    expect(startLive).toContain('await desktop?.setLiveSessionActive?.(true)')
+    expect(startLive).toContain('void desktop?.endConversation?.().catch(() => undefined)')
+    expect(startLive.indexOf('await desktop?.pauseWakeListening?.()')).toBeLessThan(
+      startLive.indexOf('await client.start()'),
+    )
+    expect(startLive.indexOf('await client.start()')).toBeLessThan(
+      startLive.indexOf('await desktop?.setLiveSessionActive?.(true)'),
+    )
+  })
+
   it('uses the main voice button as the only Live Voice start and stop control', () => {
     expect(cockpitSource).not.toContain('data-testid="codex-live-voice-managed"')
     expect(cockpitSource).not.toContain('data-testid="codex-live-voice-end"')

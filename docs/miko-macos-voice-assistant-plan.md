@@ -1,6 +1,6 @@
 # HomeRail Miko macOS 语音助手实施计划
 
-> 状态：实施进行中（Phase 1/2 已完成，Phase 3/4 正在联调，Phase 6 PR 构建已通过）
+> 状态：实施进行中（Phase 1/2 已完成，Phase 3/4/5 正在联调，上一轮 Phase 6 PR 构建已通过）
 > 最后更新：2026-07-31
 > 上游基线：`xiaotianfotos/homerail@800592b8a0cbea7c46de63c5684e7da9abdf8951`
 > 目标仓库：`engty/homerail`
@@ -280,6 +280,7 @@ error
 - [ ] 将 voice cockpit 中的现有集成整理为可复用 desktop voice-session controller，继续使用 `CodexLiveVoiceClient`。
 - [x] 新增 typed preload bridge 和 desktop-only UI event handling。
 - [x] 唤醒进入 GPT Live 前等待 KWS pause acknowledgement，避免两路同时申请麦克风。
+- [x] GPT Live 启动前释放桌面 KWS 输入，连接成功后更新 `liveSessionActive` 菜单栏状态；失败时结束会话并自动恢复监听。
 - [ ] 补充 renderer 崩溃或所有权不明确时的 live-input lease，并 fail closed 到暂停状态。
 - [x] 唤醒时自动创建新的 HomeRail voice session，并用指定 USB 输入启动 GPT Live。
 - [x] 实现“结束对话”、可配置静默超时、菜单结束、重连和自动恢复 KWS。
@@ -302,7 +303,7 @@ error
 - [ ] 补充 Electron preload isolation、permission、settings 和完整 sidecar lifecycle 验证。
 - [ ] 使用 mock 完成 wake、connect、conversation、timeout、voice command、disconnect、reconnect 和 fatal recovery 的端到端状态测试。
 - [ ] 使用“米可”正样本及普通对话/电视负样本测试三档灵敏度。
-- [x] 本地构建 arm64 App，检查 bundle、nested native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（DMG `d63b84698ce23cf948393ed9c9a23d4ffc31e6703c5e9b586cd1408d02f7b434`，ZIP `4d56b7a5e4529a40645aab2316e6605682889ce3a9edd134dfd3392c8b219485`）。
+- [x] 本地构建 arm64 App，检查 bundle、nested native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（DMG `68cb23ac5b6e247de81962a06a7af51ae25fa486f0b3302d08012d30cdb23364`，ZIP `069546e833c1e089ce546c84c42f4fb468bd14ea931b2fe7abd357e46e6a677d`）。
 - [ ] 整包安装，完成真实 Codex device auth 和 GPT Live 对话。
 - [ ] 在当前 MacBook 先用内置麦克风唤醒，并将 GPT Live 音频输出到“客厅”HomePod，完成真实链路验收。
 - [ ] 验证 HomePod 输出、系统回退、麦克风交接、登录启动、关闭隐藏、退出重启和无 Docker 运行。
