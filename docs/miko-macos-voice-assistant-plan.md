@@ -313,6 +313,7 @@ HomePod 是首选输出，但不是必须输出。macOS 公共接口可以选择
 - [x] 运行根目录 typecheck、build，以及 macOS shell 和 Agent UI focused tests。
 - [x] 补跑完整现有 HomeRail CI tests（protocol 306、SDK 35、Manager 1173、Node 189、Worker 332、CLI 257、Agent UI 489，live validator 85；仅既有 Docker/环境相关测试跳过）。
 - [x] 验证打包 App 启动、Manager/UI health、内置 Codex/KWS runtime、sidecar 设备枚举和干净退出。
+- [x] 在临时目录下载并校验固定 digest 的 KWS 模型，使用当前 MacBook 内置麦克风完成 sidecar configure/start/pause/shutdown 流式 smoke；未把模型或音频写入仓库。
 - [x] 补充 Electron permission policy、settings、diagnostic export 和 KWS protocol 单元验证；preload isolation 已通过固定 BrowserWindow 配置与 source review，完整 Electron lifecycle E2E 仍待补充。
 - [ ] 使用 mock 完成 wake、connect、conversation、timeout、voice command、disconnect、reconnect 和 fatal recovery 的端到端状态测试。
 - [ ] 使用“米可”正样本及普通对话/电视负样本测试三档灵敏度。
