@@ -13,7 +13,8 @@
     "dev": "npm run build && electron .",
     "prepare:runtime": "npm run build:source && node scripts/prepare-runtime.mjs",
     "build:source": "npm --prefix ../homerail_protocol run build && npm --prefix ../homerail_plugin_sdk run build && npm --prefix ../homerail_manager run build && npm --prefix ../homerail_node run build && npm --prefix ../homerail_worker run build && npm --prefix ../homerail_cli run build && npm --prefix ../agent-ui run build",
-    "dist": "npm run prepare:runtime && npm run build && electron-builder --config electron-builder.yml"
+    "dist": "npm run prepare:runtime && npm run build && electron-builder --config electron-builder.yml",
+    "dist:ci": "npm run prepare:runtime && npm run build && electron-builder --config electron-builder.yml --publish never"
   },
   "engines": {
     "node": ">=22.12.0",
