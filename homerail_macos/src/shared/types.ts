@@ -48,10 +48,12 @@ export interface MikoAppStatus {
   microphonePermission: 'not-determined' | 'denied' | 'granted' | 'restricted'
   selectedInputLabel?: string
   systemOutputLabel?: string
+  systemOutputTransport?: 'airplay' | 'builtin' | 'external' | 'unknown'
   codexLoggedIn: boolean
   codexLiveSupported: boolean
   codexLiveEffective: boolean
   kwsState: 'unavailable' | 'paused' | 'listening' | 'wake-detected' | 'error'
+  kwsTestMode: boolean
   kwsAudioLevel: number
   inputDevices: KwsAudioDevice[]
   wakeModelInstalled: boolean
@@ -61,6 +63,7 @@ export type MikoEvent =
   | { type: 'status'; status: MikoAppStatus }
   | { type: 'runtime-log'; stream: 'stdout' | 'stderr'; line: string }
   | { type: 'kws'; event: KwsEvent }
+  | { type: 'kws-test-wake'; detectedAt: number }
   | { type: 'conversation-end-requested' }
   | { type: 'codex-auth'; stream: 'stdout' | 'stderr'; line: string }
   | { type: 'codex-auth-status'; state: 'started' | 'completed' | 'failed'; code?: number | null; signal?: string | null }
@@ -76,6 +79,7 @@ export interface MikoDesktopApi {
   listInputDevices(): Promise<KwsAudioDevice[]>
   installWakeModel(confirmedSourceTerms: boolean): Promise<{ installed: boolean; modelDir?: string; message?: string }>
   startWakeListening(): Promise<MikoAppStatus>
+  startKwsTest(): Promise<MikoAppStatus>
   pauseWakeListening(): Promise<MikoAppStatus>
   endConversation(): Promise<MikoAppStatus>
   startCodexAuth(): Promise<{ started: boolean; message: string }>

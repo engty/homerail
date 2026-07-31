@@ -8,6 +8,7 @@ import { KwsSupervisor } from './kws-supervisor.js'
 import { KwsModelManager } from './kws/model-manager.js'
 import { SettingsStore } from './settings-store.js'
 import { DiagnosticLog } from './diagnostic-log.js'
+import { readSystemOutputSnapshot, type SystemOutputSnapshot } from './system-output-monitor.js'
 import type { KwsEvent } from './kws/protocol.js'
 import type { MikoAppStatus, MikoEvent, MikoSettingsPatch, RuntimeStatus } from './shared/types.js'
 
@@ -28,7 +29,10 @@ let kws: KwsSupervisor
 let modelManager: KwsModelManager
 let runtimeStatus: RuntimeStatus
 let kwsState: MikoAppStatus['kwsState'] = 'unavailable'
+let kwsTestMode = false
 let kwsAudioLevel = 0
+let systemOutput: SystemOutputSnapshot = { label: '系统默认输出', transport: 'unknown' }
+let systemOutputTimer: NodeJS.Timeout | null = null
 let inputDevices: MikoAppStatus['inputDevices'] = []
 let codexLoggedIn = false
 let codexLiveSupported = false
@@ -71,10 +75,13 @@ function getStatus(): MikoAppStatus {
     settings,
     microphonePermission: microphonePermission(),
     selectedInputLabel: settings.inputDevice?.label,
+    systemOutputLabel: systemOutput.label,
+    systemOutputTransport: systemOutput.transport,
     codexLoggedIn,
     codexLiveSupported,
     codexLiveEffective,
     kwsState,
+    kwsTestMode,
     kwsAudioLevel,
     inputDevices: inputDevices.map(device => ({ ...device, supportedInputConfigs: device.supportedInputConfigs.map(config => ({ ...config })) })),
     wakeModelInstalled: modelManager?.status().installed ?? false,
@@ -102,6 +109,8 @@ function refreshTray(): void {
         : '已暂停'
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: `HomeRail Miko：${stateLabel}`, enabled: false },
+    { label: `输入：${status.selectedInputLabel || '未选择'}`, enabled: false },
+    { label: `输出：${status.systemOutputLabel || '系统默认输出'}`, enabled: false },
     { type: 'separator' },
     { label: '打开 HomeRail', click: () => void showMainWindow() },
     { label: '结束当前对话', click: () => requestEndConversation() },
@@ -123,6 +132,7 @@ function requestEndConversation(): void {
 }
 
 async function endConversation(): Promise<MikoAppStatus> {
+  kwsTestMode = false
   kwsState = 'paused'
   await kws.pause()
   if (settingsStore.snapshot.listeningEnabled && settingsStore.snapshot.inputDevice && modelManager.status().installed) {
@@ -134,7 +144,10 @@ async function endConversation(): Promise<MikoAppStatus> {
 
 async function setListening(enabled: boolean): Promise<MikoAppStatus> {
   settingsStore.update({ listeningEnabled: enabled })
-  if (!enabled) await kws?.pause()
+  if (!enabled) {
+    kwsTestMode = false
+    await kws?.pause()
+  }
   else if (settingsStore.snapshot.inputDevice && modelManager?.status().installed) {
     try { await startWakeListening() } catch (error) { kwsState = 'error'; emit({ type: 'runtime-error', message: error instanceof Error ? error.message : String(error) }) }
   }
@@ -149,7 +162,8 @@ function handleKwsEvent(event: KwsEvent): void {
   else if (event.type === 'error') kwsState = 'error'
   else if (event.type === 'audio-level') kwsAudioLevel = event.rms
   if (event.type === 'wake' && settingsStore.snapshot.wakeSoundEnabled) shell.beep()
-  emit({ type: 'kws', event })
+  if (event.type === 'wake' && kwsTestMode) emit({ type: 'kws-test-wake', detectedAt: event.detectedAt })
+  else emit({ type: 'kws', event })
   emitStatus()
 }
 
@@ -175,6 +189,13 @@ async function refreshCodexStatus(): Promise<void> {
     codexLiveSupported = false
     codexLiveEffective = false
   }
+  emitStatus()
+}
+
+async function refreshSystemOutput(): Promise<void> {
+  const next = await readSystemOutputSnapshot()
+  if (next.label === systemOutput.label && next.transport === systemOutput.transport) return
+  systemOutput = next
   emitStatus()
 }
 
@@ -213,6 +234,7 @@ async function startWakeListening(): Promise<MikoAppStatus> {
   const model = modelManager.status()
   if (!model.installed) throw new Error('请先下载并确认 Miko 离线唤醒模型')
   if (microphonePermission() === 'denied' || microphonePermission() === 'restricted') throw new Error('macOS 麦克风权限未授予')
+  kwsTestMode = false
   await kws.configure(model.modelDir, settings.inputDevice.nativeDeviceId, settings.sensitivity)
   await kws.startListening()
   kwsState = 'listening'
@@ -220,7 +242,27 @@ async function startWakeListening(): Promise<MikoAppStatus> {
   return getStatus()
 }
 
+async function startKwsTest(): Promise<MikoAppStatus> {
+  const settings = settingsStore.snapshot
+  if (!settings.inputDevice) throw new Error('请先选择输入麦克风')
+  const model = modelManager.status()
+  if (!model.installed) throw new Error('请先下载并确认 Miko 离线唤醒模型')
+  if (microphonePermission() === 'denied' || microphonePermission() === 'restricted') throw new Error('macOS 麦克风权限未授予')
+  kwsTestMode = true
+  try {
+    await kws.configure(model.modelDir, settings.inputDevice.nativeDeviceId, settings.sensitivity)
+    await kws.startListening()
+    kwsState = 'listening'
+    emitStatus()
+    return getStatus()
+  } catch (error) {
+    kwsTestMode = false
+    throw error
+  }
+}
+
 async function pauseWakeListening(): Promise<MikoAppStatus> {
+  kwsTestMode = false
   await kws.pause()
   kwsState = 'paused'
   emitStatus()
@@ -318,6 +360,7 @@ function setupIpc(): void {
     }
   })
   ipcMain.handle('miko:start-wake-listening', () => startWakeListening())
+  ipcMain.handle('miko:start-kws-test', () => startKwsTest())
   ipcMain.handle('miko:pause-wake-listening', () => pauseWakeListening())
   ipcMain.handle('miko:end-conversation', () => endConversation())
   ipcMain.handle('miko:start-codex-auth', () => startCodexAuth())
@@ -355,6 +398,8 @@ async function startApplication(): Promise<void> {
   setupIpc()
   await createMainWindow()
   createTray()
+  await refreshSystemOutput()
+  systemOutputTimer = setInterval(() => void refreshSystemOutput(), 5_000)
   if (settingsStore.snapshot.startAtLogin) app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })
   emitStatus()
   await runtime.start()
@@ -373,6 +418,8 @@ app.on('before-quit', event => {
   if (quitting) return
   event.preventDefault()
   quitting = true
+  if (systemOutputTimer) clearInterval(systemOutputTimer)
+  systemOutputTimer = null
   codexAuthProcess?.kill('SIGTERM')
   void Promise.all([kws?.stop(), runtime?.stop()]).finally(() => app.exit(0))
 })

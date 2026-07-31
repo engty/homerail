@@ -9,6 +9,7 @@ const api: MikoDesktopApi = {
   listInputDevices: () => ipcRenderer.invoke('miko:list-input-devices'),
   installWakeModel: (confirmedSourceTerms: boolean) => ipcRenderer.invoke('miko:install-wake-model', confirmedSourceTerms),
   startWakeListening: () => ipcRenderer.invoke('miko:start-wake-listening'),
+  startKwsTest: () => ipcRenderer.invoke('miko:start-kws-test'),
   pauseWakeListening: () => ipcRenderer.invoke('miko:pause-wake-listening'),
   endConversation: () => ipcRenderer.invoke('miko:end-conversation'),
   startCodexAuth: () => ipcRenderer.invoke('miko:start-codex-auth'),

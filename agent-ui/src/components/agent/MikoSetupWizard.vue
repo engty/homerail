@@ -11,6 +11,8 @@ type MikoApi = {
   installWakeModel: (confirmed: boolean) => Promise<{ installed: boolean; message?: string }>
   startCodexAuth: () => Promise<{ started: boolean; message: string }>
   startWakeListening: () => Promise<any>
+  startKwsTest: () => Promise<any>
+  pauseWakeListening: () => Promise<any>
   openSoundSettings: () => Promise<void>
   onEvent: (listener: (event: any) => void) => () => void
 }
@@ -27,6 +29,8 @@ const loadingDevices = ref(false)
 const installingModel = ref(false)
 const startingAuth = ref(false)
 const startingListening = ref(false)
+const testingWake = ref(false)
+const wakeTestResult = ref('')
 const error = ref('')
 const authOutput = ref('')
 let unsubscribe: (() => void) | null = null
@@ -140,6 +144,35 @@ async function startListening(): Promise<void> {
   }
 }
 
+async function testWakeWord(): Promise<void> {
+  const bridge = api()
+  if (!bridge || !selectedNative.value || !matchedBrowser.value || !status.value?.wakeModelInstalled) return
+  error.value = ''
+  wakeTestResult.value = ''
+  try {
+    if (testingWake.value || status.value?.kwsTestMode) {
+      await bridge.pauseWakeListening()
+      testingWake.value = false
+      wakeTestResult.value = '本地测试已停止'
+      return
+    }
+    await bridge.updateSettings({
+      inputDevice: {
+        label: selectedNative.value.name,
+        nativeDeviceId: selectedNative.value.deviceId,
+        browserDeviceId: matchedBrowser.value.deviceId,
+        ...(matchedBrowser.value.groupId ? { groupId: matchedBrowser.value.groupId } : {}),
+      },
+    })
+    await bridge.startKwsTest()
+    testingWake.value = true
+    wakeTestResult.value = '请在当前麦克风前说“米可”'
+  } catch (err) {
+    testingWake.value = false
+    error.value = err instanceof Error ? err.message : String(err)
+  }
+}
+
 function handleBridgeEvent(event: any): void {
   if (event?.type === 'status') {
     status.value = event.status
@@ -149,6 +182,10 @@ function handleBridgeEvent(event: any): void {
   }
   if (event?.type === 'codex-auth') authOutput.value = `${authOutput.value}\n${event.line}`.trim().slice(-4_000)
   if (event?.type === 'codex-auth-status' && event.state === 'completed') void refreshStatus()
+  if (event?.type === 'kws-test-wake') {
+    testingWake.value = false
+    wakeTestResult.value = `已检测到“米可”（${new Date(event.detectedAt).toLocaleTimeString()}）`
+  }
 }
 
 onMounted(async () => {
@@ -174,7 +211,8 @@ onUnmounted(() => unsubscribe?.())
       <div class="grid gap-5 px-7 py-6 md:grid-cols-2">
         <div class="space-y-5">
           <div>
-            <div class="mb-2 flex items-center justify-between"><h2 class="font-medium">1. 选择 USB 麦克风</h2><button class="text-xs text-[var(--hr-accent)]" :disabled="loadingDevices" @click="refreshDevices">{{ loadingDevices ? '检测中…' : '重新检测' }}</button></div>
+            <div class="mb-2 flex items-center justify-between"><h2 class="font-medium">1. 选择输入麦克风</h2><button class="text-xs text-[var(--hr-accent)]" :disabled="loadingDevices" @click="refreshDevices">{{ loadingDevices ? '检测中…' : '重新检测' }}</button></div>
+            <p class="mb-2 text-xs text-[var(--hr-text-3)]">MacBook 调试可使用内置麦克风；部署到 Mac mini 时再选择 USB 全向会议麦克风。</p>
             <select v-model="selectedNativeId" class="w-full rounded-lg border border-[var(--hr-border)] bg-[var(--hr-surface-1)] px-3 py-2 text-sm">
               <option value="" disabled>请选择输入设备</option>
               <option v-for="device in nativeDevices" :key="device.deviceId" :value="device.deviceId">{{ device.name }}</option>
@@ -187,6 +225,8 @@ onUnmounted(() => unsubscribe?.())
             </label>
             <p class="mt-2 text-xs text-[var(--hr-text-3)]">KWS：{{ status?.kwsAudioLevel ? `${Math.round(status.kwsAudioLevel * 100)}%` : '等待输入' }}</p>
             <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-[var(--hr-surface-2)]"><div class="h-full bg-[var(--hr-accent)] transition-[width]" :style="{ width: `${Math.round((status?.kwsAudioLevel || 0) * 100)}%` }" /></div>
+            <button class="mt-3 rounded-lg border border-[var(--hr-border)] px-3 py-2 text-sm disabled:opacity-45" :disabled="!selectedNative || !matchedBrowser || !status?.wakeModelInstalled" @click="testWakeWord">{{ testingWake || status?.kwsTestMode ? '停止本地唤醒测试' : '测试“米可”唤醒' }}</button>
+            <p v-if="wakeTestResult" class="mt-2 text-xs text-[var(--hr-text-3)]">{{ wakeTestResult }}</p>
           </div>
 
           <div>
@@ -214,7 +254,8 @@ onUnmounted(() => unsubscribe?.())
 
           <div>
             <h2 class="mb-2 font-medium">5. 声音输出</h2>
-            <p class="text-xs text-[var(--hr-text-3)]">GPT Live 使用 macOS 当前默认输出。请在系统声音设置中选择 HomePod。</p>
+            <p class="text-xs text-[var(--hr-text-3)]">当前系统输出：{{ status?.systemOutputLabel || '检测中…' }}<span v-if="status?.systemOutputTransport === 'airplay'">（AirPlay/HomePod）</span></p>
+            <p class="mt-1 text-xs text-[var(--hr-text-3)]">GPT Live 使用 macOS 当前默认输出。请在系统声音设置中选择 HomePod。</p>
             <button class="mt-3 rounded-lg border border-[var(--hr-border)] px-3 py-2 text-sm" @click="api()?.openSoundSettings()">打开声音设置</button>
           </div>
 

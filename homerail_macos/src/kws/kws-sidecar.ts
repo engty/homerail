@@ -145,7 +145,13 @@ function closeInput(state: ConfiguredState): void {
 function monitorDevice(state: ConfiguredState): void {
   if (state.devicePollTimer) return
   state.devicePollTimer = setInterval(() => {
-    const found = listDevices().some(device => device.deviceId === state.deviceId)
+    let found = false
+    try {
+      found = listDevices().some(device => device.deviceId === state.deviceId)
+    } catch (error) {
+      sendError(error instanceof Error ? error.message : String(error), state.generation)
+      return
+    }
     if (!found) {
       if (!state.deviceLost) {
         state.deviceLost = true

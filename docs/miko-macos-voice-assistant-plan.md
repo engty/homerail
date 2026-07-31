@@ -265,7 +265,7 @@ error
 - [x] 使用 App 专用 `HOMERAIL_HOME`、health probe 和有限重启退避，禁止凭据日志。
 - [x] 增加按大小和数量轮转的诊断日志，并在写入前做凭据形态脱敏。
 - [x] 内置 `@openai/codex@0.146.0`，设置 `HOMERAIL_CODEX_BIN`，实现 device auth 引导和 capability 检查（真实登录仍需在安装后的用户环境中执行）。
-- [ ] 验证 Docker Desktop 未安装或未启动时 Manager、唤醒和 GPT Live 仍可启动。
+- [x] 验证 Docker Desktop 未启动时 Manager 和静态 Agent UI 仍可启动；本机 runtime 使用 `--no-build-worker-image` 健康检查通过，GPT Live 真实会话仍待 Codex 登录后验证。
 
 ### Phase 2：唤醒词服务
 
@@ -273,21 +273,22 @@ error
 - [x] 实现模型下载、固定 URL/digest 校验和 license/redistribution gate。
 - [x] 实现 16 kHz streaming、resampling、“米可”配置、三档灵敏度、唤醒限流和纯本地音频处理。
 - [x] 实现 native 输入枚举、指定设备持久化、断开检测、通知和同设备恢复（物理拔插验收待在真实 USB 麦克风上执行）。
-- [ ] 实现不会启动 GPT Live 的本地测试模式（提示音、KWS 音量表已完成）。
+- [x] 实现不会启动 GPT Live 的本地 KWS 测试模式（提示音、KWS 音量表和“米可”检测反馈已完成）。
 
 ### Phase 3：GPT Live 集成
 
 - [ ] 将 voice cockpit 中的现有集成整理为可复用 desktop voice-session controller，继续使用 `CodexLiveVoiceClient`。
 - [x] 新增 typed preload bridge 和 desktop-only UI event handling。
-- [ ] 使用 acknowledgement 和 fail-closed transition 强制 KWS/Live 麦克风互斥。
+- [x] 唤醒进入 GPT Live 前等待 KWS pause acknowledgement，避免两路同时申请麦克风。
+- [ ] 补充 renderer 崩溃或所有权不明确时的 live-input lease，并 fail closed 到暂停状态。
 - [x] 唤醒时自动创建新的 HomeRail voice session，并用指定 USB 输入启动 GPT Live。
 - [x] 实现“结束对话”、可配置静默超时、菜单结束、重连和自动恢复 KWS。
 - [ ] 保留全部工具确认和 destructive-action 保护。
-- [ ] 监测 macOS 系统输出并显示 HomePod/系统回退状态，不实现私有输出路由。
+- [x] 监测 macOS 系统输出并显示 AirPlay/HomePod 或系统回退状态，不实现私有输出路由。
 
 ### Phase 4：首次设置、设置页和诊断
 
-- [x] 增加权限、麦克风选择、Codex 登录、超时、提示音开关和登录启动的首次设置（本地 KWS 测试和系统输出状态仍待补）。
+- [x] 增加权限、麦克风选择、本地 KWS 测试、Codex 登录、超时、提示音开关、系统输出状态和登录启动的首次设置。
 - [ ] 将 Miko 设置集成进现有 HomeRail 设置体验，不向用户暴露原始 KWS 参数。
 - [ ] 增加菜单栏状态和命令、可操作通知和脱敏诊断导出。
 - [x] 增加设置 schema validation、原子持久化和前向迁移测试。
@@ -295,11 +296,13 @@ error
 
 ### Phase 5：当前 M4 MacBook 验证
 
-- [ ] 运行根目录 typecheck、build、unit tests 和现有 HomeRail CI tests。
-- [ ] 运行 Electron 的 preload isolation、permission、lifecycle、settings 和 sidecar 消息验证。
+- [x] 运行根目录 typecheck、build，以及 macOS shell 和 Agent UI focused tests。
+- [ ] 补跑完整现有 HomeRail CI tests。
+- [x] 验证打包 App 启动、Manager/UI health、内置 Codex/KWS runtime、sidecar 设备枚举和干净退出。
+- [ ] 补充 Electron preload isolation、permission、settings 和完整 sidecar lifecycle 验证。
 - [ ] 使用 mock 完成 wake、connect、conversation、timeout、voice command、disconnect、reconnect 和 fatal recovery 的端到端状态测试。
 - [ ] 使用“米可”正样本及普通对话/电视负样本测试三档灵敏度。
-- [x] 本地构建 arm64 App，检查 bundle、nested native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke。
+- [x] 本地构建 arm64 App，检查 bundle、nested native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（DMG `d63b84698ce23cf948393ed9c9a23d4ffc31e6703c5e9b586cd1408d02f7b434`，ZIP `4d56b7a5e4529a40645aab2316e6605682889ce3a9edd134dfd3392c8b219485`）。
 - [ ] 整包安装，完成真实 Codex device auth 和 GPT Live 对话。
 - [ ] 在当前 MacBook 先用内置麦克风唤醒，并将 GPT Live 音频输出到“客厅”HomePod，完成真实链路验收。
 - [ ] 验证 HomePod 输出、系统回退、麦克风交接、登录启动、关闭隐藏、退出重启和无 Docker 运行。

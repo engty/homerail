@@ -3887,6 +3887,7 @@ function handleCodexLiveVoiceEvent(event: CodexLiveVoiceEvent): void {
     if (event.recoverable !== true) {
       stopCodexLiveVoiceMeter()
       codexLiveVoiceMuted.value = false
+      void stopCodexLiveVoice()
     }
     return
   }
@@ -3950,6 +3951,7 @@ async function startMikoLiveConversation(): Promise<void> {
     const status = await api?.getStatus?.()
     const deviceId = status?.settings?.inputDevice?.browserDeviceId
     if (typeof deviceId === 'string' && deviceId) saveVoiceAudioInputDeviceId(deviceId)
+    await api?.pauseWakeListening?.()
     if (!workspace.value) await startSession()
     if (!codexLiveVoiceEffective.value) throw new Error('GPT Live 尚未完成配置')
     await startCodexLiveVoice()
