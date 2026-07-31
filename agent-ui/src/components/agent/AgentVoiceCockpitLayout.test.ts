@@ -121,19 +121,18 @@ describe('AgentVoiceCockpit responsive layout', () => {
       cockpitSource.indexOf('async function startCodexLiveVoice(): Promise<void>'),
       cockpitSource.indexOf('async function stopCodexLiveVoice('),
     )
-    expect(startLive).toContain('await desktop?.pauseWakeListening?.()')
-    expect(startLive).toContain('await desktop?.setLiveSessionActive?.(true)')
-    expect(startLive).toContain('startLiveInputLeaseHeartbeat()')
-    expect(startLive).toContain('void desktop?.endConversation?.().catch(() => undefined)')
-    expect(startLive.indexOf('await desktop?.pauseWakeListening?.()')).toBeLessThan(
+    expect(startLive).toContain('await mikoLiveSessionController.prepareInput()')
+    expect(startLive).toContain('await mikoLiveSessionController.activate()')
+    expect(startLive).toContain('await mikoLiveSessionController.deactivate(false).catch(() => undefined)')
+    expect(startLive.indexOf('await mikoLiveSessionController.prepareInput()')).toBeLessThan(
       startLive.indexOf('await client.start()'),
     )
     expect(startLive.indexOf('await client.start()')).toBeLessThan(
-      startLive.indexOf('await desktop?.setLiveSessionActive?.(true)'),
+      startLive.indexOf('await mikoLiveSessionController.activate()'),
     )
     expect(cockpitSource).toContain("event?.type === 'live-input-lease-expired'")
     expect(cockpitSource).toContain('void stopCodexLiveVoice(false)')
-    expect(cockpitSource).toContain('api.renewLiveSessionLease()')
+    expect(cockpitSource).toContain('mikoLiveSessionController.stopHeartbeat()')
   })
 
   it('uses the main voice button as the only Live Voice start and stop control', () => {

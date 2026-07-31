@@ -43,6 +43,7 @@ import {
   type CodexLiveVoiceEvent,
   type CodexLiveVoiceState
 } from '@/agent/codex-live-voice-client'
+import { MikoLiveSessionController } from '@/agent/miko-live-session-controller'
 import GenerativeUiCanonicalSurface from '@/components/generative-ui/GenerativeUiCanonicalSurface.vue'
 import GenerativeUiShadowPreview from '@/components/generative-ui/GenerativeUiShadowPreview.vue'
 import DagTaskCanvas from '@/components/generative-ui/DagTaskCanvas.vue'
@@ -371,8 +372,6 @@ let codexLiveVoiceClient: CodexLiveVoiceClient | null = null
 let mikoDesktopUnsubscribe: (() => void) | null = null
 let mikoWakeStartPromise: Promise<void> | null = null
 let mikoSilenceTimer: number | null = null
-let liveInputLeaseHeartbeatTimer: number | null = null
-let liveInputLeaseHeartbeatInFlight = false
 let codexLiveVoiceMeterAudioContext: AudioContext | null = null
 let codexLiveVoiceMeterAnalyser: AnalyserNode | null = null
 let codexLiveVoiceMeterSource: MediaStreamAudioSourceNode | null = null
@@ -410,6 +409,14 @@ let asrFinalTimer = 0
 let asrClosing = false
 let lastSubmittedVoiceTranscriptKey = ''
 let lastSubmittedVoiceTranscriptAt = 0
+
+const mikoLiveSessionController = new MikoLiveSessionController(
+  () => mikoDesktopApi(),
+  reason => {
+    error.value = reason.message || 'GPT Live 麦克风会话失去确认，已暂停监听，请重新唤醒'
+    void stopCodexLiveVoice(false)
+  },
+)
 let managerStatusTimer = 0
 let voiceStatusUnsub: (() => void) | null = null
 let uninstallGamepadMonitorDebugApi: (() => void) | null = null
@@ -1416,7 +1423,7 @@ onUnmounted(() => {
   teardownVoiceHidControl()
   teardownVoiceGamepadControl()
   clearMikoSilenceTimer()
-  stopLiveInputLeaseHeartbeat()
+  mikoLiveSessionController.dispose()
   if (codexLiveVoiceClient) void stopCodexLiveVoice()
   else stopVoiceCapture()
   teardownTtsCoordination()
@@ -3940,7 +3947,7 @@ function setupMikoDesktopBridge(): void {
     }
     if (event?.type === 'kws' && event.event?.type === 'wake') void startMikoLiveConversation()
     if (event?.type === 'live-input-lease-expired') {
-      stopLiveInputLeaseHeartbeat()
+      mikoLiveSessionController.stopHeartbeat()
       error.value = 'GPT Live 麦克风会话失去确认，已暂停监听，请重新唤醒'
       void stopCodexLiveVoice(false)
     }
@@ -3977,9 +3984,8 @@ async function startCodexLiveVoice(): Promise<void> {
   const sessionId = workspace.value?.session_id
   if (!sessionId || !codexLiveVoiceEffective.value) return
   if (codexLiveVoiceClient) await stopCodexLiveVoice(false)
-  const desktop = mikoDesktopApi()
   // Release the local wake-word stream before Chromium requests the live input.
-  await desktop?.pauseWakeListening?.()
+  await mikoLiveSessionController.prepareInput()
   clearMikoSilenceTimer()
   closeVoiceInputAfterSubmit()
   voiceTurnAbort?.abort()
@@ -4004,71 +4010,29 @@ async function startCodexLiveVoice(): Promise<void> {
   codexLiveVoiceClient = client
   try {
     await client.start()
-    const liveStatus = await desktop?.setLiveSessionActive?.(true)
-    if (desktop?.renewLiveSessionLease && liveStatus?.liveSessionActive !== true) {
-      throw new Error('GPT Live 麦克风租约未建立')
-    }
-    startLiveInputLeaseHeartbeat()
+    await mikoLiveSessionController.activate()
   } catch (err: any) {
     if (codexLiveVoiceClient !== client) return
     codexLiveVoiceClient = null
     await client.stop(false).catch(() => undefined)
+    await mikoLiveSessionController.deactivate(false).catch(() => undefined)
     stopCodexLiveVoiceMeter()
     applyCodexLiveVoiceState('error')
     error.value = err?.message || t('voice.liveVoice.error')
-    void desktop?.endConversation?.().catch(() => undefined)
+    void mikoDesktopApi()?.endConversation?.().catch(() => undefined)
   }
 }
 
 async function stopCodexLiveVoice(notifyServer = true): Promise<void> {
-  stopLiveInputLeaseHeartbeat()
   clearMikoSilenceTimer()
   const client = codexLiveVoiceClient
   codexLiveVoiceClient = null
   if (client) await client.stop(notifyServer).catch(() => undefined)
+  await mikoLiveSessionController.deactivate(notifyServer).catch(() => undefined)
   stopCodexLiveVoiceMeter()
   codexLiveVoiceMuted.value = false
   applyCodexLiveVoiceState('idle')
   liveTranscript.value = ''
-  if (notifyServer) void mikoDesktopApi()?.endConversation?.().catch(() => undefined)
-}
-
-function startLiveInputLeaseHeartbeat(): void {
-  stopLiveInputLeaseHeartbeat()
-  const api = mikoDesktopApi()
-  if (typeof api?.renewLiveSessionLease !== 'function') return
-  liveInputLeaseHeartbeatTimer = window.setInterval(() => {
-    if (!codexLiveVoiceClient) {
-      stopLiveInputLeaseHeartbeat()
-      return
-    }
-    if (liveInputLeaseHeartbeatInFlight) return
-    liveInputLeaseHeartbeatInFlight = true
-    void Promise.resolve(api.renewLiveSessionLease())
-      .then((status: any) => {
-        if (status?.liveSessionActive === true) return
-        stopLiveInputLeaseHeartbeat()
-        error.value = 'GPT Live 麦克风会话失去确认，已暂停监听，请重新唤醒'
-        void stopCodexLiveVoice(false)
-      })
-      .catch(errorValue => {
-        stopLiveInputLeaseHeartbeat()
-        error.value = errorValue instanceof Error ? errorValue.message : String(errorValue)
-        void stopCodexLiveVoice(false)
-        void api.setLiveSessionActive?.(false).catch(() => undefined)
-      })
-      .finally(() => {
-        liveInputLeaseHeartbeatInFlight = false
-      })
-  }, 2_000)
-}
-
-function stopLiveInputLeaseHeartbeat(): void {
-  if (liveInputLeaseHeartbeatTimer !== null) {
-    window.clearInterval(liveInputLeaseHeartbeatTimer)
-    liveInputLeaseHeartbeatTimer = null
-  }
-  liveInputLeaseHeartbeatInFlight = false
 }
 
 function startCodexLiveVoiceMeter(stream: MediaStream): void {

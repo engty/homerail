@@ -277,7 +277,7 @@ error
 
 ### Phase 3：GPT Live 集成
 
-- [ ] 将 voice cockpit 中的现有集成整理为可复用 desktop voice-session controller，继续使用 `CodexLiveVoiceClient`。
+- [x] 将 voice cockpit 中的桌面麦克风交接、GPT Live 激活、heartbeat 和释放整理为可复用 `MikoLiveSessionController`，继续使用 `CodexLiveVoiceClient`。
 - [x] 新增 typed preload bridge 和 desktop-only UI event handling。
 - [x] 唤醒进入 GPT Live 前等待 KWS pause acknowledgement，避免两路同时申请麦克风。
 - [x] GPT Live 启动前释放桌面 KWS 输入，连接成功后更新 `liveSessionActive` 菜单栏状态；失败时结束会话并自动恢复监听。
