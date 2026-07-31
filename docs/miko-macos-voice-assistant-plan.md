@@ -1,6 +1,6 @@
 # HomeRail Miko macOS 语音助手实施计划
 
-> 状态：实施进行中（Phase 1 已完成，Phase 2 已完成代码实现，Phase 3/4 正在联调）
+> 状态：实施进行中（Phase 1/2 已完成，Phase 3/4 正在联调，Phase 6 PR 构建已通过）
 > 最后更新：2026-07-31
 > 上游基线：`xiaotianfotos/homerail@800592b8a0cbea7c46de63c5684e7da9abdf8951`
 > 目标仓库：`engty/homerail`
@@ -35,6 +35,7 @@
 | 唤醒发音 | 中文“米可”，音素配置 `M IY1 K OW0 @MIKO` |
 | 唤醒引擎 | 离线 `sherpa-onnx`，不使用需要 AccessKey 的云服务 |
 | 输入设备 | 用户明确选择的外置 USB 麦克风 |
+| 当前 MacBook 调试组合 | 使用 MacBook 内置麦克风作为输入；macOS 音频输出选择“客厅”（HomePod AirPlay） |
 | 麦克风断开 | 暂停并通知；同一设备恢复后才自动继续，不擅自切换内置麦克风 |
 | 唤醒灵敏度 | 低、中、高三档，默认中档，设置页提供实时测试 |
 | 唤醒反馈 | 播放短提示音，默认开启，可关闭 |
@@ -300,15 +301,17 @@ error
 - [ ] 使用“米可”正样本及普通对话/电视负样本测试三档灵敏度。
 - [x] 本地构建 arm64 App，检查 bundle、nested native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke。
 - [ ] 整包安装，完成真实 Codex device auth 和 GPT Live 对话。
+- [ ] 在当前 MacBook 先用内置麦克风唤醒，并将 GPT Live 音频输出到“客厅”HomePod，完成真实链路验收。
 - [ ] 验证 HomePod 输出、系统回退、麦克风交接、登录启动、关闭隐藏、退出重启和无 Docker 运行。
 
 ### Phase 6：GitHub 构建和发布
 
 - [x] 新增 fork 自有的 macOS workflow，不包含 actor 限制、私有仓库 token 或 `homerail_desktop` 依赖。
-- [ ] Pull request 上执行确定性测试和 unsigned arm64 package smoke test，runner 使用 `macos-15`。
+- [x] Pull request 上执行确定性测试和 unsigned arm64 package smoke test，runner 使用 `macos-15`（run `30636975142` 通过）。
 - [ ] 手动 dispatch 和 `miko-v*` tag 构建 DMG/ZIP，验证内置 Node/Codex/KWS 和架构，并生成 SHA-256。
-- [ ] 第三方 Actions 固定到 commit SHA；除 tag release job 外使用只读权限。
-- [ ] 上传 CI artifacts；`miko-v0.1.0` 创建 GitHub prerelease，写明安装、Gatekeeper、隐私和限制。
+- [x] 第三方 Actions 固定到 commit SHA；除 tag release job 外使用只读权限。
+- [x] 上传 CI artifacts（push run `30636970595` 已生成 DMG、ZIP 和 SHA-256）。
+- [ ] 创建 `miko-v0.1.0` GitHub prerelease，写明安装、Gatekeeper、隐私和限制。
 - [ ] 从 `codex/miko-macos-app` 向 `engty/homerail` 创建 PR，检查精确 diff，全部 checks 通过后合并。
 
 ### Phase 7：Mac mini 部署和验收
@@ -324,6 +327,7 @@ error
 ### 需要用户提供或执行的事项
 
 - [ ] 准备一只兼容 macOS 的 USB 全向会议麦克风。开发可先用 MacBook 麦克风，最终校准必须使用真实设备。
+- [x] 当前 MacBook 调试设备已确认：MacBook 内置麦克风作为输入，系统输出“客厅”作为 HomePod AirPlay 输出；Mac mini 最终替换为 USB 全向会议麦克风。
 - [ ] 麦克风放在正常说话清晰、但不紧贴或正对 HomePod 的位置。
 - [ ] 确认 OpenAI/Codex 账号可以使用 GPT Live，并亲自完成一次 device auth；不共享 auth 文件或 token。
 - [ ] 确认 Mac mini 为 Apple Silicon、macOS 15+，并有足够空间存放 App、runtime、模型和日志。
