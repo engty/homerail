@@ -1,0 +1,40 @@
+appId: com.engty.homerailmiko
+productName: HomeRail Miko
+artifactName: HomeRail-Miko-${version}-${arch}.${ext}
+directories:
+  output: dist-electron
+files:
+  - dist/**/*
+  - package.json
+extraResources:
+  - from: .runtime-staging/homerail-runtime
+    to: homerail-runtime
+  - from: dist/kws
+    to: miko-kws
+  - from: node_modules/node-cpal
+    to: miko-kws/node_modules/node-cpal
+  - from: node_modules/sherpa-onnx-node
+    to: miko-kws/node_modules/sherpa-onnx-node
+  - from: node_modules/sherpa-onnx-darwin-arm64
+    to: miko-kws/node_modules/sherpa-onnx-darwin-arm64
+mac:
+  category: public.app-category.utilities
+  minimumSystemVersion: '15.0'
+  target:
+    - target: dmg
+      arch:
+        - arm64
+    - target: zip
+      arch:
+        - arm64
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  extendInfo:
+    NSMicrophoneUsageDescription: HomeRail Miko uses the selected USB microphone for local wake-word detection and GPT Live conversation.
+  icon: ../agent-ui/public/icons/homerail-icon-1024.png
+publish:
+  provider: github
+  owner: engty
+  repo: homerail
+  releaseType: prerelease

@@ -1,5 +1,8 @@
 node_modules/
 dist/
+dist-electron/
+homerail_macos/.runtime-staging/
+homerail_macos/.build-cache/
 coverage/
 .env
 .env.*

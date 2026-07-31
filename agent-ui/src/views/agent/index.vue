@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAgentStore } from '@/stores/agent-store'
 import AgentChatPanel from '@/components/agent/AgentChatPanel.vue'
@@ -11,6 +11,7 @@ import AgentModeTopBar from '@/components/agent/AgentModeTopBar.vue'
 import DagResourceStatusPill from '@/components/agent/DagResourceStatusPill.vue'
 import DagRuntimeOverlay from '@/components/agent/dag-runtime/DagRuntimeOverlay.vue'
 import OnboardingWizard from '@/components/agent/onboarding/OnboardingWizard.vue'
+import MikoSetupWizard from '@/components/agent/MikoSetupWizard.vue'
 import { useOnboardingStatus } from '@/composables/useOnboardingStatus'
 import { PanelRightClose, PanelRightOpen } from 'lucide-vue-next'
 
@@ -19,6 +20,7 @@ const route = useRoute()
 const textModeEnabled = flagEnabled(import.meta.env.VITE_HOMERAIL_ENABLE_TEXT_MODE)
 const voiceOnlyMode = !textModeEnabled
 const { status: onboardingStatus, refresh: refreshOnboarding } = useOnboardingStatus()
+const mikoSetupOpen = ref(false)
 
 const captureRunId = computed(() => {
   const raw = route.query.captureRun
@@ -44,9 +46,14 @@ function isMobileVoiceEntry(): boolean {
 
 onMounted(async () => {
   if (voiceOnlyMode || isMobileVoiceEntry()) store.voiceCockpitOpen = true
+  const miko = (window as any).homerailMiko
+  if (miko?.getStatus) {
+    const status = await miko.getStatus().catch(() => null)
+    mikoSetupOpen.value = status?.settings?.onboardingComplete !== true
+  }
   // 检测配置状态，缺配则弹出新手引导
   await refreshOnboarding()
-  if (!captureMode.value && onboardingStatus.value.needsOnboarding && !store.onboardingDismissed) {
+  if (!mikoSetupOpen.value && !captureMode.value && onboardingStatus.value.needsOnboarding && !store.onboardingDismissed) {
     store.openOnboarding()
   }
 })
@@ -144,6 +151,8 @@ watch(
     v-if="!store.settingsPageOpen && !store.runtimeOverlayOpen && (voiceOnlyMode || store.voiceCockpitOpen)"
     :voice-only="voiceOnlyMode"
   />
+
+  <MikoSetupWizard v-if="mikoSetupOpen" @completed="mikoSetupOpen = false" />
 
   <!-- 新手引导横版小窗（悬浮 overlay，不替换 voice cockpit） -->
   <OnboardingWizard

@@ -1,6 +1,6 @@
 # HomeRail Miko macOS 语音助手实施计划
 
-> 状态：规划已完成，尚未开始实施
+> 状态：实施进行中（Phase 1 已完成，Phase 2 已完成代码实现，Phase 3/4 正在联调）
 > 最后更新：2026-07-31
 > 上游基线：`xiaotianfotos/homerail@800592b8a0cbea7c46de63c5684e7da9abdf8951`
 > 目标仓库：`engty/homerail`
@@ -81,7 +81,7 @@ flowchart LR
 ### 4.1 进程划分
 
 - **Electron 主进程**：负责菜单栏、设置窗口、登录启动、权限策略、输出设备状态、通知、子进程监管和总状态机。
-- **HomeRail runtime sidecar**：使用内置 arm64 Node.js 启动 Manager 和预构建 Agent UI，只绑定 loopback。App 数据放在 `~/Library/Application Support/HomeRail Miko/`；Codex 认证仍由 Codex 在用户正常的 Codex home 中管理。
+- **HomeRail runtime sidecar**：使用内置 arm64 Node.js 启动 Manager 和预构建 Agent UI，只绑定 loopback。App 数据放在 `~/Library/Application Support/homerail-miko-macos/homerail/`；Codex 认证仍由 Codex 在用户正常的 Codex home 中管理。
 - **KWS sidecar**：独立 Node 子进程，使用 `node-cpal` 捕获 CoreAudio，使用 `sherpa-onnx-node` 检测关键词。原生音频计算不阻塞 Electron UI，KWS 崩溃也不应拖垮主进程。
 - **Agent UI renderer**：窗口隐藏后仍保持运行。它负责 WebRTC 和现有 `CodexLiveVoiceClient`，通过 context-isolated preload bridge 接收唤醒事件。
 - **Codex CLI**：通过 `HOMERAIL_CODEX_BIN` 交给 Manager。允许监听前必须检查版本、认证状态和 `realtime_conversation` capability。
@@ -256,39 +256,40 @@ error
 
 ### Phase 1：macOS 壳与 runtime
 
-- [ ] 新增独立的 `homerail_macos` Electron package，不修改或依赖官方私有 desktop 仓库。
-- [ ] 在 lockfile 中固定 Electron `43.2.0`、electron-builder `26.15.3`、Node `24.18.0` 和全部 native dependencies。
-- [ ] 实现 single instance、context isolation、sandboxed renderer、收敛的 permission handler、菜单栏生命周期、隐藏窗口和干净退出。
+- [x] 新增独立的 `homerail_macos` Electron package，不修改或依赖官方私有 desktop 仓库。
+- [x] 在 lockfile 和 runtime manifest 中固定 Electron `43.2.0`、electron-builder `26.15.3`、Node `24.18.0` 和全部 native dependencies。
+- [x] 实现 single instance、context isolation、sandboxed renderer、收敛的 permission handler、菜单栏生命周期、隐藏窗口和干净退出。
 - [ ] 使用现有 HomeRail 视觉资产生成合规的 App icon 和 macOS menu bar template icon。
-- [ ] 内置 arm64 Node 和构建后的 HomeRail packages；Manager 与静态 Agent UI 只绑定动态选择的 loopback 端口。
-- [ ] 使用 App 专用 `HOMERAIL_HOME`、health probe、有限重启退避、轮转诊断日志，禁止凭据日志。
-- [ ] 内置 `@openai/codex@0.146.0`，设置 `HOMERAIL_CODEX_BIN`，实现 device auth 引导和 capability 检查。
+- [x] 内置 arm64 Node 和构建后的 HomeRail packages；Manager 与静态 Agent UI 只绑定动态选择的 loopback 端口。
+- [x] 使用 App 专用 `HOMERAIL_HOME`、health probe 和有限重启退避，禁止凭据日志。
+- [x] 增加按大小和数量轮转的诊断日志，并在写入前做凭据形态脱敏。
+- [x] 内置 `@openai/codex@0.146.0`，设置 `HOMERAIL_CODEX_BIN`，实现 device auth 引导和 capability 检查（真实登录仍需在安装后的用户环境中执行）。
 - [ ] 验证 Docker Desktop 未安装或未启动时 Manager、唤醒和 GPT Live 仍可启动。
 
 ### Phase 2：唤醒词服务
 
-- [ ] 新增 KWS sidecar、typed NDJSON 协议、generation guard、进程监管和单元测试。
-- [ ] 实现模型下载、固定 URL/digest 校验和 license/redistribution gate。
-- [ ] 实现 16 kHz streaming、resampling、“米可”配置、三档灵敏度、唤醒限流和纯本地音频处理。
-- [ ] 实现 native 输入枚举、指定设备持久化、断开检测、通知和同设备恢复。
-- [ ] 实现提示音、音量表和不会启动 GPT Live 的本地测试模式。
+- [x] 新增 KWS sidecar、typed NDJSON 协议、generation guard、进程监管和单元测试。
+- [x] 实现模型下载、固定 URL/digest 校验和 license/redistribution gate。
+- [x] 实现 16 kHz streaming、resampling、“米可”配置、三档灵敏度、唤醒限流和纯本地音频处理。
+- [x] 实现 native 输入枚举、指定设备持久化、断开检测、通知和同设备恢复（物理拔插验收待在真实 USB 麦克风上执行）。
+- [ ] 实现不会启动 GPT Live 的本地测试模式（提示音、KWS 音量表已完成）。
 
 ### Phase 3：GPT Live 集成
 
 - [ ] 将 voice cockpit 中的现有集成整理为可复用 desktop voice-session controller，继续使用 `CodexLiveVoiceClient`。
-- [ ] 新增 typed preload bridge 和 desktop-only UI event handling。
+- [x] 新增 typed preload bridge 和 desktop-only UI event handling。
 - [ ] 使用 acknowledgement 和 fail-closed transition 强制 KWS/Live 麦克风互斥。
-- [ ] 唤醒时自动创建新的 HomeRail voice session，并用指定 USB 输入启动 GPT Live。
-- [ ] 实现“结束对话”、可配置静默超时、菜单结束、重连和自动恢复 KWS。
+- [x] 唤醒时自动创建新的 HomeRail voice session，并用指定 USB 输入启动 GPT Live。
+- [x] 实现“结束对话”、可配置静默超时、菜单结束、重连和自动恢复 KWS。
 - [ ] 保留全部工具确认和 destructive-action 保护。
 - [ ] 监测 macOS 系统输出并显示 HomePod/系统回退状态，不实现私有输出路由。
 
 ### Phase 4：首次设置、设置页和诊断
 
-- [ ] 增加权限、麦克风选择/测试、Codex 登录、输出确认、超时、提示音和登录启动的首次设置。
+- [x] 增加权限、麦克风选择、Codex 登录、超时、提示音开关和登录启动的首次设置（本地 KWS 测试和系统输出状态仍待补）。
 - [ ] 将 Miko 设置集成进现有 HomeRail 设置体验，不向用户暴露原始 KWS 参数。
 - [ ] 增加菜单栏状态和命令、可操作通知和脱敏诊断导出。
-- [ ] 增加设置 schema validation、原子持久化和前向迁移测试。
+- [x] 增加设置 schema validation、原子持久化和前向迁移测试。
 - [ ] 明确展示隐私边界：唤醒前音频只在本地，唤醒后的语音发送到 GPT Live。
 
 ### Phase 5：当前 M4 MacBook 验证
@@ -297,13 +298,13 @@ error
 - [ ] 运行 Electron 的 preload isolation、permission、lifecycle、settings 和 sidecar 消息验证。
 - [ ] 使用 mock 完成 wake、connect、conversation、timeout、voice command、disconnect、reconnect 和 fatal recovery 的端到端状态测试。
 - [ ] 使用“米可”正样本及普通对话/电视负样本测试三档灵敏度。
-- [ ] 本地构建 arm64 App，检查 bundle、nested native binaries、entitlements、麦克风说明和 ad-hoc signature。
+- [x] 本地构建 arm64 App，检查 bundle、nested native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke。
 - [ ] 整包安装，完成真实 Codex device auth 和 GPT Live 对话。
 - [ ] 验证 HomePod 输出、系统回退、麦克风交接、登录启动、关闭隐藏、退出重启和无 Docker 运行。
 
 ### Phase 6：GitHub 构建和发布
 
-- [ ] 新增 fork 自有的 macOS workflow，不包含 actor 限制、私有仓库 token 或 `homerail_desktop` 依赖。
+- [x] 新增 fork 自有的 macOS workflow，不包含 actor 限制、私有仓库 token 或 `homerail_desktop` 依赖。
 - [ ] Pull request 上执行确定性测试和 unsigned arm64 package smoke test，runner 使用 `macos-15`。
 - [ ] 手动 dispatch 和 `miko-v*` tag 构建 DMG/ZIP，验证内置 Node/Codex/KWS 和架构，并生成 SHA-256。
 - [ ] 第三方 Actions 固定到 commit SHA；除 tag release job 外使用只读权限。

@@ -116,7 +116,7 @@ import {
   isBuiltinEdgeTtsSettings
 } from '@/components/agent/builtin-tts'
 import { postAppearanceToArtifactFrame } from '@/appearance/appearance-registry'
-import { createVoiceMediaStream } from '@/utils/voice-audio-input'
+import { createVoiceMediaStream, saveVoiceAudioInputDeviceId } from '@/utils/voice-audio-input'
 import {
   NATIVE_GAMEPAD_ANALOG_EVENT,
   NATIVE_GAMEPAD_BUTTON_EVENT,
@@ -368,6 +368,9 @@ function selectGenerativeUiNode(payload: { node_id: string }): void {
 
 let mediaStream: MediaStream | null = null
 let codexLiveVoiceClient: CodexLiveVoiceClient | null = null
+let mikoDesktopUnsubscribe: (() => void) | null = null
+let mikoWakeStartPromise: Promise<void> | null = null
+let mikoSilenceTimer: number | null = null
 let codexLiveVoiceMeterAudioContext: AudioContext | null = null
 let codexLiveVoiceMeterAnalyser: AnalyserNode | null = null
 let codexLiveVoiceMeterSource: MediaStreamAudioSourceNode | null = null
@@ -1292,6 +1295,7 @@ onMounted(() => {
   void startSession()
   void loadVoiceRuntime()
   void setupVoiceHidControl()
+  setupMikoDesktopBridge()
   startVoiceGamepadControl()
   void loadVoiceSessionShortcuts()
   installCodexVoiceTextBridge()
@@ -1389,6 +1393,8 @@ onUnmounted(() => {
     pluginRegistryStateUnsub()
     pluginRegistryStateUnsub = null
   }
+  mikoDesktopUnsubscribe?.()
+  mikoDesktopUnsubscribe = null
   // /ws/events is shared with the DAG runtime store; component teardown only
   // removes this cockpit's subscriptions and must not close the singleton.
   if (widgetHighlightTimer) window.clearTimeout(widgetHighlightTimer)
@@ -1407,6 +1413,7 @@ onUnmounted(() => {
   removeFullscreenRetry()
   teardownVoiceHidControl()
   teardownVoiceGamepadControl()
+  clearMikoSilenceTimer()
   if (codexLiveVoiceClient) void stopCodexLiveVoice()
   else stopVoiceCapture()
   teardownTtsCoordination()
@@ -3842,7 +3849,10 @@ function handleCodexLiveVoiceEvent(event: CodexLiveVoiceEvent): void {
   if (event.type === 'transcript.delta') {
     const delta = typeof event.delta === 'string' ? event.delta : ''
     const role = String(event.role || '').toLowerCase()
-    if (role === 'user') liveTranscript.value += delta
+    if (role === 'user') {
+      clearMikoSilenceTimer()
+      liveTranscript.value += delta
+    }
     if (role === 'assistant') spokenText.value += delta
     return
   }
@@ -3851,15 +3861,21 @@ function handleCodexLiveVoiceEvent(event: CodexLiveVoiceEvent): void {
     const text = typeof event.text === 'string' ? event.text.trim() : ''
     const role = String(event.role || '').toLowerCase()
     if (role === 'user') {
+      clearMikoSilenceTimer()
       liveTranscript.value = text
       lastUserTranscript.value = text
       const normalized = normalizeVoiceTranscriptForDuplicate(text)
       optimisticConversationItems.value = optimisticConversationItems.value.filter(
         item => normalizeVoiceTranscriptForDuplicate(item.text) !== normalized
       )
+      if (normalizeVoiceTranscriptForDuplicate(text) === '结束对话') {
+        void stopCodexLiveVoice()
+        return
+      }
     } else if (role === 'assistant') {
       spokenText.value = text
       liveTranscript.value = ''
+      scheduleMikoSilenceTimeout()
     }
     return
   }
@@ -3879,10 +3895,79 @@ function handleCodexLiveVoiceEvent(event: CodexLiveVoiceEvent): void {
   // explicit stop path marks the client stopped before closing the transport.
 }
 
+function clearMikoSilenceTimer(): void {
+  if (mikoSilenceTimer === null) return
+  window.clearTimeout(mikoSilenceTimer)
+  mikoSilenceTimer = null
+}
+
+function scheduleMikoSilenceTimeout(): void {
+  clearMikoSilenceTimer()
+  const api = mikoDesktopApi()
+  if (!api || !codexLiveVoiceClient) return
+  void api.getStatus?.().then((status: any) => {
+    if (!codexLiveVoiceClient) return
+    const seconds = Math.max(15, Math.min(300, Number(status?.settings?.silenceTimeoutSeconds) || 60))
+    mikoSilenceTimer = window.setTimeout(() => {
+      mikoSilenceTimer = null
+      if (codexLiveVoiceClient) void stopCodexLiveVoice()
+    }, seconds * 1_000)
+  }).catch(() => {
+    if (!codexLiveVoiceClient) return
+    mikoSilenceTimer = window.setTimeout(() => {
+      mikoSilenceTimer = null
+      if (codexLiveVoiceClient) void stopCodexLiveVoice()
+    }, 60_000)
+  })
+}
+
+function mikoDesktopApi(): any | null {
+  if (typeof window === 'undefined') return null
+  return (window as any).homerailMiko || null
+}
+
+function setupMikoDesktopBridge(): void {
+  const api = mikoDesktopApi()
+  if (!api?.onEvent) return
+  mikoDesktopUnsubscribe = api.onEvent((event: any) => {
+    if (event?.type === 'status') {
+      const deviceId = event.status?.settings?.inputDevice?.browserDeviceId
+      if (typeof deviceId === 'string' && deviceId) saveVoiceAudioInputDeviceId(deviceId)
+    }
+    if (event?.type === 'kws' && event.event?.type === 'wake') void startMikoLiveConversation()
+    if (event?.type === 'conversation-end-requested') void stopCodexLiveVoice()
+  })
+  void api.getStatus?.().then((status: any) => {
+    const deviceId = status?.settings?.inputDevice?.browserDeviceId
+    if (typeof deviceId === 'string' && deviceId) saveVoiceAudioInputDeviceId(deviceId)
+  }).catch(() => undefined)
+}
+
+async function startMikoLiveConversation(): Promise<void> {
+  if (mikoWakeStartPromise) return mikoWakeStartPromise
+  mikoWakeStartPromise = (async () => {
+    const api = mikoDesktopApi()
+    const status = await api?.getStatus?.()
+    const deviceId = status?.settings?.inputDevice?.browserDeviceId
+    if (typeof deviceId === 'string' && deviceId) saveVoiceAudioInputDeviceId(deviceId)
+    if (!workspace.value) await startSession()
+    if (!codexLiveVoiceEffective.value) throw new Error('GPT Live 尚未完成配置')
+    await startCodexLiveVoice()
+    if (!codexLiveVoiceClient) throw new Error('GPT Live 未能建立连接')
+  })().catch(err => {
+    error.value = err instanceof Error ? err.message : String(err)
+    void mikoDesktopApi()?.endConversation?.().catch(() => undefined)
+  }).finally(() => {
+    mikoWakeStartPromise = null
+  })
+  return mikoWakeStartPromise
+}
+
 async function startCodexLiveVoice(): Promise<void> {
   const sessionId = workspace.value?.session_id
   if (!sessionId || !codexLiveVoiceEffective.value) return
   if (codexLiveVoiceClient) await stopCodexLiveVoice(false)
+  clearMikoSilenceTimer()
   closeVoiceInputAfterSubmit()
   voiceTurnAbort?.abort()
   voiceTurnAbort = null
@@ -3916,6 +4001,7 @@ async function startCodexLiveVoice(): Promise<void> {
 }
 
 async function stopCodexLiveVoice(notifyServer = true): Promise<void> {
+  clearMikoSilenceTimer()
   const client = codexLiveVoiceClient
   codexLiveVoiceClient = null
   if (client) await client.stop(notifyServer).catch(() => undefined)
@@ -3923,6 +4009,7 @@ async function stopCodexLiveVoice(notifyServer = true): Promise<void> {
   codexLiveVoiceMuted.value = false
   applyCodexLiveVoiceState('idle')
   liveTranscript.value = ''
+  if (notifyServer) void mikoDesktopApi()?.endConversation?.().catch(() => undefined)
 }
 
 function startCodexLiveVoiceMeter(stream: MediaStream): void {
