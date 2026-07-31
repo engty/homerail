@@ -22,6 +22,7 @@
   "dependencies": {
     "@openai/codex": "0.146.0",
     "node-cpal": "0.1.1",
+    "sherpa-onnx-darwin-arm64": "1.13.4",
     "sherpa-onnx-node": "1.13.4"
   },
   "devDependencies": {
