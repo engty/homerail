@@ -1,6 +1,6 @@
 # HomeRail Miko macOS 语音助手实施计划
 
-> 状态：实施进行中（Phase 1/2 已完成，Phase 3/4/5 正在联调，Phase 6 PR 构建已通过）
+> 状态：实施进行中（Phase 1/2 已完成，Phase 3/4 主要实现已完成，Phase 5 本地验证已完成；真实设备联调与 Phase 7 待执行）
 > 最后更新：2026-07-31
 > 上游基线：`xiaotianfotos/homerail@800592b8a0cbea7c46de63c5684e7da9abdf8951`
 > 目标仓库：`engty/homerail`
@@ -303,7 +303,7 @@ error
 - [ ] 补充 Electron preload isolation、permission、settings 和完整 sidecar lifecycle 验证。
 - [ ] 使用 mock 完成 wake、connect、conversation、timeout、voice command、disconnect、reconnect 和 fatal recovery 的端到端状态测试。
 - [ ] 使用“米可”正样本及普通对话/电视负样本测试三档灵敏度。
-- [x] 本地构建 arm64 App，检查 bundle、nested native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（DMG `2a3fd247b93f931d4bd90b05a1dec6b1eb5d378bd64b7794b7b6e9a4ab9295b4`，ZIP `2a4918e146d31cfcfde6923cf802aeb1babd15e970f0514fde17244f110d3051`）。
+- [x] 本地构建 arm64 App，检查 bundle、nested native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（DMG `6501f26817b3bcb1582a15313e8e11a364ece24fcff4da658be1195af4503bc8`，ZIP `00778838b913f1cafe4695a26cabfa3a1d573128bb26ad6973a33d51824aeb3b`）。
 - [ ] 整包安装，完成真实 Codex device auth 和 GPT Live 对话。
 - [ ] 在当前 MacBook 先用内置麦克风唤醒，并将 GPT Live 音频输出到“客厅”HomePod，完成真实链路验收。
 - [ ] 验证 HomePod 输出、系统回退、麦克风交接、登录启动、关闭隐藏、退出重启和无 Docker 运行。
@@ -311,12 +311,12 @@ error
 ### Phase 6：GitHub 构建和发布
 
 - [x] 新增 fork 自有的 macOS workflow，不包含 actor 限制、私有仓库 token 或 `homerail_desktop` 依赖。
-- [x] Pull request 上执行确定性测试和 unsigned arm64 package smoke test，runner 使用 `macos-15`（run `30641594485` 通过）。
+- [x] Pull request 上执行确定性测试和 unsigned arm64 package smoke test，runner 使用 `macos-15`（run `30643999696`，head `374c2a3`，通过）。
 - [ ] 手动 dispatch 和 `miko-v*` tag 构建 DMG/ZIP，验证内置 Node/Codex/KWS 和架构，并生成 SHA-256。
 - [x] 第三方 Actions 固定到 commit SHA；除 tag release job 外使用只读权限。
-- [x] 上传 CI artifacts（push run `30641589719` 已生成 DMG、ZIP 和 SHA-256）。
+- [x] 上传 CI artifacts（push run `30643993135`，head `374c2a3`，已生成 DMG、ZIP 和 SHA-256）。
 - [ ] 创建 `miko-v0.1.0` GitHub prerelease，写明安装、Gatekeeper、隐私和限制。
-- [ ] 从 `codex/miko-macos-app` 向 `engty/homerail` 创建 PR，检查精确 diff，全部 checks 通过后合并。
+- [x] 已从 `codex/miko-macos-app` 创建 draft PR，精确 diff 和全部 checks 已通过；合并仍待真实设备联调完成后执行。
 
 ### Phase 7：Mac mini 部署和验收
 
