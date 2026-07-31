@@ -51,10 +51,9 @@ jobs:
 
       - name: Install macOS shell dependencies
         # sherpa-onnx-node 1.13.4 advertises an unavailable darwin-x64
-        # optional package. npm ci rejects the otherwise valid arm64 lockfile
-        # before it can omit that platform; npm install still honors the lock
-        # for all available packages and is deterministic on this arm64 runner.
-        run: npm --prefix homerail_macos install --no-audit --no-fund
+        # optional package. The arm64 package is pinned as a direct dependency,
+        # so omit platform optionals and avoid npm trying to resolve x64.
+        run: npm --prefix homerail_macos install --package-lock=false --omit=optional --no-audit --no-fund
 
       - name: Typecheck and test macOS shell
         run: |
