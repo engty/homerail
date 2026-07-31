@@ -163,8 +163,10 @@ function handleKwsEvent(event: KwsEvent): void {
   else if (event.type === 'error') kwsState = 'error'
   else if (event.type === 'audio-level') kwsAudioLevel = event.rms
   if (event.type === 'wake' && settingsStore.snapshot.wakeSoundEnabled) shell.beep()
-  if (event.type === 'wake' && kwsTestMode) emit({ type: 'kws-test-wake', detectedAt: event.detectedAt })
-  else emit({ type: 'kws', event })
+  if (event.type === 'wake' && kwsTestMode) {
+    kwsTestMode = false
+    emit({ type: 'kws-test-wake', detectedAt: event.detectedAt })
+  } else emit({ type: 'kws', event })
   emitStatus()
 }
 
