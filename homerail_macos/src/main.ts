@@ -129,6 +129,7 @@ function refreshTray(): void {
     { label: `输出：${status.systemOutputLabel || '系统默认输出'}`, enabled: false },
     { type: 'separator' },
     { label: '打开 HomeRail', click: () => void showMainWindow() },
+    { label: '打开 Miko 设置', click: () => void openMikoSettings() },
     { label: '结束当前对话', click: () => requestEndConversation() },
     {
       label: status.settings.listeningEnabled ? '暂停监听' : '恢复监听',
@@ -364,6 +365,11 @@ async function showMainWindow(): Promise<void> {
   if (runtimeStatus.state === 'ready' && mainWindow.webContents.getURL() !== runtime.uiUrl) await mainWindow.loadURL(runtime.uiUrl)
   mainWindow.show()
   mainWindow.focus()
+}
+
+async function openMikoSettings(): Promise<void> {
+  await showMainWindow()
+  emit({ type: 'settings-requested' })
 }
 
 function createTray(): void {

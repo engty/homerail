@@ -67,6 +67,7 @@ export type MikoEvent =
   | { type: 'kws-test-wake'; detectedAt: number }
   | { type: 'live-input-lease-expired' }
   | { type: 'conversation-end-requested' }
+  | { type: 'settings-requested' }
   | { type: 'codex-auth'; stream: 'stdout' | 'stderr'; line: string }
   | { type: 'codex-auth-status'; state: 'started' | 'completed' | 'failed'; code?: number | null; signal?: string | null }
   | { type: 'runtime-error'; message: string }

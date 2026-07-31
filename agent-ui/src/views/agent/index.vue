@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAgentStore } from '@/stores/agent-store'
 import AgentChatPanel from '@/components/agent/AgentChatPanel.vue'
@@ -21,6 +21,7 @@ const textModeEnabled = flagEnabled(import.meta.env.VITE_HOMERAIL_ENABLE_TEXT_MO
 const voiceOnlyMode = !textModeEnabled
 const { status: onboardingStatus, refresh: refreshOnboarding } = useOnboardingStatus()
 const mikoSetupOpen = ref(false)
+let mikoDesktopUnsubscribe: (() => void) | null = null
 
 const captureRunId = computed(() => {
   const raw = route.query.captureRun
@@ -51,11 +52,21 @@ onMounted(async () => {
     const status = await miko.getStatus().catch(() => null)
     mikoSetupOpen.value = status?.settings?.onboardingComplete !== true
   }
+  if (miko?.onEvent) {
+    mikoDesktopUnsubscribe = miko.onEvent((event: any) => {
+      if (event?.type === 'settings-requested') mikoSetupOpen.value = true
+    })
+  }
   // 检测配置状态，缺配则弹出新手引导
   await refreshOnboarding()
   if (!mikoSetupOpen.value && !captureMode.value && onboardingStatus.value.needsOnboarding && !store.onboardingDismissed) {
     store.openOnboarding()
   }
+})
+
+onUnmounted(() => {
+  mikoDesktopUnsubscribe?.()
+  mikoDesktopUnsubscribe = null
 })
 
 async function closeOnboarding(): Promise<void> {
