@@ -298,12 +298,12 @@ error
 ### Phase 5：当前 M4 MacBook 验证
 
 - [x] 运行根目录 typecheck、build，以及 macOS shell 和 Agent UI focused tests。
-- [ ] 补跑完整现有 HomeRail CI tests。
+- [x] 补跑完整现有 HomeRail CI tests（protocol 306、SDK 35、Manager 1173、Node 189、Worker 332、CLI 257、Agent UI 489，live validator 85；仅既有 Docker/环境相关测试跳过）。
 - [x] 验证打包 App 启动、Manager/UI health、内置 Codex/KWS runtime、sidecar 设备枚举和干净退出。
 - [ ] 补充 Electron preload isolation、permission、settings 和完整 sidecar lifecycle 验证。
 - [ ] 使用 mock 完成 wake、connect、conversation、timeout、voice command、disconnect、reconnect 和 fatal recovery 的端到端状态测试。
 - [ ] 使用“米可”正样本及普通对话/电视负样本测试三档灵敏度。
-- [x] 本地构建 arm64 App，检查 bundle、nested native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（DMG `68cb23ac5b6e247de81962a06a7af51ae25fa486f0b3302d08012d30cdb23364`，ZIP `069546e833c1e089ce546c84c42f4fb468bd14ea931b2fe7abd357e46e6a677d`）。
+- [x] 本地构建 arm64 App，检查 bundle、nested native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（DMG `2a3fd247b93f931d4bd90b05a1dec6b1eb5d378bd64b7794b7b6e9a4ab9295b4`，ZIP `2a4918e146d31cfcfde6923cf802aeb1babd15e970f0514fde17244f110d3051`）。
 - [ ] 整包安装，完成真实 Codex device auth 和 GPT Live 对话。
 - [ ] 在当前 MacBook 先用内置麦克风唤醒，并将 GPT Live 音频输出到“客厅”HomePod，完成真实链路验收。
 - [ ] 验证 HomePod 输出、系统回退、麦克风交接、登录启动、关闭隐藏、退出重启和无 Docker 运行。
