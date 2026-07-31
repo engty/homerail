@@ -252,7 +252,7 @@ error
 - [x] 公开 fork `xiaotianfotos/homerail` 到 `engty/homerail`。
 - [x] 设置 `origin=engty/homerail`、`upstream=xiaotianfotos/homerail`。
 - [x] 创建 `codex/miko-macos-app` 分支，不直接在 fork 的 `main` 开发。
-- [ ] 将本计划作为第一个独立 commit 推送。
+- [x] 将本计划作为第一个独立 commit 推送。
 
 ### Phase 1：macOS 壳与 runtime
 
