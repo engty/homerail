@@ -17,6 +17,7 @@ const api: MikoDesktopApi = {
   startCodexAuth: () => ipcRenderer.invoke('miko:start-codex-auth'),
   openHomeRail: () => ipcRenderer.invoke('miko:open-home-rail'),
   openSoundSettings: () => ipcRenderer.invoke('miko:open-sound-settings'),
+  exportDiagnostics: () => ipcRenderer.invoke('miko:export-diagnostics'),
   showWindow: () => ipcRenderer.invoke('miko:show-window'),
   quit: () => ipcRenderer.invoke('miko:quit'),
   onEvent: (listener: (event: MikoEvent) => void) => {

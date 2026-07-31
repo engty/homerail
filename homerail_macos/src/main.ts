@@ -2,14 +2,15 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { app, BrowserWindow, Menu, nativeImage, ipcMain, session, shell, systemPreferences, Tray } from 'electron'
+import { app, BrowserWindow, dialog, Menu, nativeImage, Notification, ipcMain, session, shell, systemPreferences, Tray } from 'electron'
 import { RuntimeSupervisor } from './runtime-supervisor.js'
 import { KwsSupervisor } from './kws-supervisor.js'
 import { KwsModelManager } from './kws/model-manager.js'
 import { SettingsStore } from './settings-store.js'
 import { DiagnosticLog } from './diagnostic-log.js'
 import { LiveInputLease } from './live-input-lease.js'
-import { readSystemOutputSnapshot, type SystemOutputSnapshot } from './system-output-monitor.js'
+import { outputChangeNotice, readSystemOutputSnapshot, systemOutputChanged, type SystemOutputSnapshot } from './system-output-monitor.js'
+import { isAllowedMediaPermission, isTrustedLocalAppUrl } from './security-policy.js'
 import type { KwsEvent } from './kws/protocol.js'
 import type { MikoAppStatus, MikoEvent, MikoSettingsPatch, RuntimeStatus } from './shared/types.js'
 
@@ -53,15 +54,6 @@ let codexAuthProcess: ChildProcess | null = null
 let quitting = false
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
 
-function isLocalAppUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url)
-    return parsed.protocol === 'http:' && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost')
-  } catch {
-    return false
-  }
-}
-
 function microphonePermission(): MikoAppStatus['microphonePermission'] {
   const status = systemPermissionStatus()
   if (status === 'not-determined' || status === 'denied' || status === 'granted' || status === 'restricted') return status
@@ -104,7 +96,18 @@ function getStatus(): MikoAppStatus {
 
 function emit(event: MikoEvent): void {
   if (event.type === 'status') refreshTray()
+  if (event.type === 'runtime-error') notifyUser('HomeRail Miko', event.message)
+  if (event.type === 'codex-auth-status' && event.state === 'failed') notifyUser('HomeRail Miko', 'Codex 设备登录未完成，请打开 Miko 设置重试')
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('miko:event', event)
+}
+
+function notifyUser(title: string, body: string): void {
+  try {
+    if (typeof Notification.isSupported === 'function' && !Notification.isSupported()) return
+    new Notification({ title, body: body.slice(0, 256) }).show()
+  } catch {
+    // Notifications are advisory and must never affect audio ownership.
+  }
 }
 
 function emitStatus(): void {
@@ -136,8 +139,45 @@ function refreshTray(): void {
       click: () => void setListening(!status.settings.listeningEnabled),
     },
     { label: '打开声音设置', click: () => void shell.openExternal('x-apple.systempreferences:com.apple.Sound-Settings.extension') },
+    { label: '导出脱敏诊断', click: () => void exportDiagnostics() },
     { label: '退出 HomeRail Miko', click: () => app.quit() },
   ]))
+}
+
+async function exportDiagnostics(): Promise<{ saved: boolean; path?: string; message?: string }> {
+  if (!diagnosticLog) return { saved: false, message: '诊断日志尚未准备完成' }
+  const defaultPath = path.join(app.getPath('documents'), `HomeRail-Miko-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`)
+  const options = {
+    title: '导出 HomeRail Miko 脱敏诊断',
+    defaultPath,
+    filters: [{ name: 'Text', extensions: ['txt'] }],
+  }
+  const result = mainWindow && !mainWindow.isDestroyed()
+    ? await dialog.showSaveDialog(mainWindow, options)
+    : await dialog.showSaveDialog(options)
+  if (result.canceled || !result.filePath) return { saved: false, message: '已取消诊断导出' }
+  try {
+    const status = getStatus()
+    diagnosticLog.exportTo(result.filePath, {
+      appVersion: app.getVersion(),
+      lifecycle: status.lifecycle,
+      runtimeState: status.runtime.state,
+      kwsState: status.kwsState,
+      selectedInput: status.selectedInputLabel || 'none',
+      systemOutput: status.systemOutputLabel || 'unknown',
+      systemOutputTransport: status.systemOutputTransport || 'unknown',
+      codexLoggedIn: status.codexLoggedIn,
+      codexLiveSupported: status.codexLiveSupported,
+      codexLiveEffective: status.codexLiveEffective,
+      wakeModelInstalled: status.wakeModelInstalled,
+    })
+    notifyUser('HomeRail Miko', '脱敏诊断已导出')
+    return { saved: true, path: result.filePath }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    notifyUser('HomeRail Miko', `诊断导出失败：${message}`)
+    return { saved: false, message }
+  }
 }
 
 function requestEndConversation(): void {
@@ -180,6 +220,9 @@ function handleKwsEvent(event: KwsEvent): void {
   else if (event.type === 'paused' || event.type === 'device-lost') { kwsState = 'paused'; kwsAudioLevel = 0 }
   else if (event.type === 'error') kwsState = 'error'
   else if (event.type === 'audio-level') kwsAudioLevel = event.rms
+  if (event.type === 'device-lost') notifyUser('HomeRail Miko', '唤醒麦克风已断开，监听已暂停；请恢复同一设备')
+  if (event.type === 'device-restored') notifyUser('HomeRail Miko', '唤醒麦克风已恢复，正在重新监听“米可”')
+  if (event.type === 'error') notifyUser('HomeRail Miko', `唤醒服务错误：${event.message}`)
   if (event.type === 'wake' && settingsStore.snapshot.wakeSoundEnabled) shell.beep()
   if (event.type === 'wake' && kwsTestMode) {
     kwsTestMode = false
@@ -215,8 +258,13 @@ async function refreshCodexStatus(): Promise<void> {
 
 async function refreshSystemOutput(): Promise<void> {
   const next = await readSystemOutputSnapshot()
-  if (next.label === systemOutput.label && next.transport === systemOutput.transport) return
+  if (!systemOutputChanged(systemOutput, next)) return
+  const previous = systemOutput
   systemOutput = next
+  if (liveSessionActive) {
+    notifyUser('HomeRail Miko', outputChangeNotice(previous, next))
+    emit({ type: 'system-output-changed', previous, current: next, duringLive: true })
+  }
   emitStatus()
 }
 
@@ -315,14 +363,11 @@ async function pauseWakeListening(): Promise<MikoAppStatus> {
 
 function setupPermissionHandlers(): void {
   const handler = (webContents: Electron.WebContents, permission: string, callback: (allowed: boolean) => void) => {
-    callback(
-      permission === 'media'
-      && isLocalAppUrl(webContents.getURL()),
-    )
+    callback(isAllowedMediaPermission(permission, webContents.getURL()))
   }
   session.defaultSession.setPermissionRequestHandler(handler)
   session.defaultSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
-    return permission === 'media' && isLocalAppUrl(requestingOrigin)
+    return isAllowedMediaPermission(permission, requestingOrigin)
   })
 }
 
@@ -348,7 +393,7 @@ async function createMainWindow(): Promise<void> {
   })
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!isLocalAppUrl(url)) event.preventDefault()
+    if (!isTrustedLocalAppUrl(url)) event.preventDefault()
   })
   await mainWindow.loadURL(setupPageUrl())
 }
@@ -417,6 +462,7 @@ function setupIpc(): void {
   ipcMain.handle('miko:start-codex-auth', () => startCodexAuth())
   ipcMain.handle('miko:open-home-rail', () => showMainWindow())
   ipcMain.handle('miko:open-sound-settings', () => shell.openExternal('x-apple.systempreferences:com.apple.Sound-Settings.extension'))
+  ipcMain.handle('miko:export-diagnostics', () => exportDiagnostics())
   ipcMain.handle('miko:show-window', () => showMainWindow())
   ipcMain.handle('miko:quit', () => app.quit())
 }
@@ -437,7 +483,12 @@ async function startApplication(): Promise<void> {
     isPackaged: app.isPackaged,
     userDataPath: app.getPath('userData'),
     onStatus: status => {
+      const previous = runtimeStatus
       runtimeStatus = status
+      if ((status.state === 'error' || status.state === 'unavailable')
+        && (previous?.state !== status.state || previous?.message !== status.message)) {
+        emit({ type: 'runtime-error', message: status.message || 'HomeRail runtime 不可用' })
+      }
       emitStatus()
       if (status.state === 'ready' && mainWindow && !mainWindow.isDestroyed()) void mainWindow.loadURL(runtime.uiUrl)
       if (status.state === 'ready') void refreshCodexStatus()

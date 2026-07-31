@@ -131,8 +131,19 @@ describe('AgentVoiceCockpit responsive layout', () => {
       startLive.indexOf('await mikoLiveSessionController.activate()'),
     )
     expect(cockpitSource).toContain("event?.type === 'live-input-lease-expired'")
+    expect(cockpitSource).toContain("event?.type === 'runtime-error'")
     expect(cockpitSource).toContain('void stopCodexLiveVoice(false)')
     expect(cockpitSource).toContain('mikoLiveSessionController.stopHeartbeat()')
+  })
+
+  it('never turns a voice suggestion into an implicit task confirmation', () => {
+    const sendText = cockpitSource.slice(
+      cockpitSource.indexOf('async function sendText('),
+      cockpitSource.indexOf('async function submitCodexTextDraft('),
+    )
+    expect(sendText).toContain('Only the visible confirmation control below may')
+    expect(sendText).not.toContain('await submitDraft(true)')
+    expect(cockpitSource).toContain('data-testid="voice-submit-draft"')
   })
 
   it('uses the main voice button as the only Live Voice start and stop control', () => {

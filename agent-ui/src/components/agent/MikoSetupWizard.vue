@@ -15,6 +15,7 @@ type MikoApi = {
   pauseWakeListening: () => Promise<any>
   openHomeRail: () => Promise<void>
   openSoundSettings: () => Promise<void>
+  exportDiagnostics: () => Promise<{ saved: boolean; message?: string }>
   onEvent: (listener: (event: any) => void) => () => void
 }
 
@@ -34,6 +35,8 @@ const testingWake = ref(false)
 const wakeTestResult = ref('')
 const error = ref('')
 const authOutput = ref('')
+const diagnosticResult = ref('')
+const exportingDiagnostics = ref(false)
 let unsubscribe: (() => void) | null = null
 
 const selectedNative = computed(() => nativeDevices.value.find(device => device.deviceId === selectedNativeId.value) || null)
@@ -174,6 +177,21 @@ async function testWakeWord(): Promise<void> {
   }
 }
 
+async function exportDiagnostics(): Promise<void> {
+  const bridge = api()
+  if (!bridge) return
+  exportingDiagnostics.value = true
+  diagnosticResult.value = ''
+  try {
+    const result = await bridge.exportDiagnostics()
+    diagnosticResult.value = result.saved ? '脱敏诊断已导出' : (result.message || '诊断导出已取消')
+  } catch (err) {
+    diagnosticResult.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    exportingDiagnostics.value = false
+  }
+}
+
 function handleBridgeEvent(event: any): void {
   if (event?.type === 'status') {
     status.value = event.status
@@ -263,6 +281,10 @@ onUnmounted(() => unsubscribe?.())
           </div>
 
           <p v-if="error" class="rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-xs text-red-200">{{ error }}</p>
+          <div class="flex items-center gap-3">
+            <button class="rounded-lg border border-[var(--hr-border)] px-3 py-2 text-xs disabled:opacity-45" :disabled="exportingDiagnostics" @click="exportDiagnostics">{{ exportingDiagnostics ? '导出中…' : '导出脱敏诊断' }}</button>
+            <p v-if="diagnosticResult" class="text-xs text-[var(--hr-text-3)]">{{ diagnosticResult }}</p>
+          </div>
           <button class="w-full rounded-lg bg-[var(--hr-accent)] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45" :disabled="!canStart || startingListening" @click="startListening">{{ startingListening ? '正在启动监听…' : '开始监听“米可”' }}</button>
           <p v-if="!canStart" class="text-xs text-[var(--hr-text-3)]">完成麦克风匹配、模型下载和 Codex GPT Live 登录后即可开始。</p>
         </div>

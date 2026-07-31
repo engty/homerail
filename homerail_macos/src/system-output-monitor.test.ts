@@ -1,6 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseSystemOutputSnapshot } from './system-output-monitor.js'
+import { outputChangeNotice, parseSystemOutputSnapshot, systemOutputChanged } from './system-output-monitor.js'
+
+test('classifies output route changes without assuming HomePod takeover', () => {
+  const homePod = { label: '客厅', transport: 'airplay' as const }
+  const builtIn = { label: 'MacBook Pro扬声器', transport: 'builtin' as const }
+  assert.equal(systemOutputChanged(homePod, homePod), false)
+  assert.equal(systemOutputChanged(homePod, builtIn), true)
+  assert.equal(outputChangeNotice(builtIn, homePod), 'AirPlay 输出已切换到“客厅”')
+  assert.equal(outputChangeNotice(homePod, builtIn), 'HomePod 输出不可用，当前使用“MacBook Pro扬声器”')
+  assert.equal(outputChangeNotice(builtIn, { label: 'USB 音箱', transport: 'external' }), '系统输出已切换到“USB 音箱”')
+})
 
 test('selects the default AirPlay output and classifies it', () => {
   const snapshot = parseSystemOutputSnapshot({

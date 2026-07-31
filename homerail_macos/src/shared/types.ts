@@ -17,6 +17,13 @@ export type KwsSensitivity = 'low' | 'medium' | 'high'
 
 export type RuntimeState = 'stopped' | 'starting' | 'ready' | 'unavailable' | 'error'
 
+export type MikoOutputTransport = 'airplay' | 'builtin' | 'external' | 'unknown'
+
+export interface MikoSystemOutputSnapshot {
+  label: string
+  transport: MikoOutputTransport
+}
+
 export interface MikoSettingsV1 {
   schemaVersion: 1
   onboardingComplete: boolean
@@ -48,7 +55,7 @@ export interface MikoAppStatus {
   microphonePermission: 'not-determined' | 'denied' | 'granted' | 'restricted'
   selectedInputLabel?: string
   systemOutputLabel?: string
-  systemOutputTransport?: 'airplay' | 'builtin' | 'external' | 'unknown'
+  systemOutputTransport?: MikoOutputTransport
   codexLoggedIn: boolean
   codexLiveSupported: boolean
   codexLiveEffective: boolean
@@ -71,8 +78,15 @@ export type MikoEvent =
   | { type: 'codex-auth'; stream: 'stdout' | 'stderr'; line: string }
   | { type: 'codex-auth-status'; state: 'started' | 'completed' | 'failed'; code?: number | null; signal?: string | null }
   | { type: 'runtime-error'; message: string }
+  | { type: 'system-output-changed'; previous: MikoSystemOutputSnapshot; current: MikoSystemOutputSnapshot; duringLive: boolean }
 
 export type MikoSettingsPatch = Partial<Omit<MikoSettingsV1, 'schemaVersion'>>
+
+export interface MikoDiagnosticExportResult {
+  saved: boolean
+  path?: string
+  message?: string
+}
 
 export interface MikoDesktopApi {
   getStatus(): Promise<MikoAppStatus>
@@ -90,6 +104,7 @@ export interface MikoDesktopApi {
   startCodexAuth(): Promise<{ started: boolean; message: string }>
   openHomeRail(): Promise<void>
   openSoundSettings(): Promise<void>
+  exportDiagnostics(): Promise<MikoDiagnosticExportResult>
   showWindow(): Promise<void>
   quit(): Promise<void>
   onEvent(listener: (event: MikoEvent) => void): () => void

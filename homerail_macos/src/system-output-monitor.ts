@@ -1,13 +1,21 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import type { MikoOutputTransport, MikoSystemOutputSnapshot } from './shared/types.js'
 
 const execFileAsync = promisify(execFile)
 
-export type SystemOutputTransport = 'airplay' | 'builtin' | 'external' | 'unknown'
+export type SystemOutputTransport = MikoOutputTransport
 
-export interface SystemOutputSnapshot {
-  label: string
-  transport: SystemOutputTransport
+export type SystemOutputSnapshot = MikoSystemOutputSnapshot
+
+export function systemOutputChanged(previous: SystemOutputSnapshot, current: SystemOutputSnapshot): boolean {
+  return previous.label !== current.label || previous.transport !== current.transport
+}
+
+export function outputChangeNotice(previous: SystemOutputSnapshot, current: SystemOutputSnapshot): string {
+  if (current.transport === 'airplay') return `AirPlay 输出已切换到“${current.label}”`
+  if (previous.transport === 'airplay') return `HomePod 输出不可用，当前使用“${current.label}”`
+  return `系统输出已切换到“${current.label}”`
 }
 
 type AudioItem = {

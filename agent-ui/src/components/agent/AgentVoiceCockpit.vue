@@ -3225,8 +3225,10 @@ async function sendText(text: string, optimisticItemId?: string): Promise<void> 
       suggestedAction = (await handleVoiceStreamEvent(event, optimisticId)) || suggestedAction
     }, turnSignal, selectedNodeId)
     if (suggestedAction === 'confirm') {
+      // A voice turn may surface a pending task confirmation, but it must not
+      // approve the mutation. Only the visible confirmation control below may
+      // call submitDraft(), so wake-word activation cannot authorize tools.
       loading.value = false
-      await submitDraft(true)
     }
   } catch (err: any) {
     // 切换 session 时主动 abort 旧 turn 的 stream，这不是错误，静默退出。
@@ -3950,6 +3952,9 @@ function setupMikoDesktopBridge(): void {
       mikoLiveSessionController.stopHeartbeat()
       error.value = 'GPT Live 麦克风会话失去确认，已暂停监听，请重新唤醒'
       void stopCodexLiveVoice(false)
+    }
+    if (event?.type === 'runtime-error' && typeof event.message === 'string') {
+      error.value = event.message
     }
     if (event?.type === 'conversation-end-requested') void stopCodexLiveVoice()
   })

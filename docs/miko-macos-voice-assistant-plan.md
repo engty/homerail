@@ -1,7 +1,7 @@
 # HomeRail Miko macOS 语音助手实施计划
 
 > 状态：实施进行中（Phase 1/2 已完成，Phase 3/4 主要实现已完成，Phase 5 本地验证已完成；真实设备联调与 Phase 7 待执行）
-> 最后更新：2026-07-31
+> 最后更新：2026-08-01
 > 上游基线：`xiaotianfotos/homerail@800592b8a0cbea7c46de63c5684e7da9abdf8951`
 > 目标仓库：`engty/homerail`
 > 目标 App：`HomeRail Miko`
@@ -20,7 +20,7 @@
 - 说出“结束对话”后立即结束当前会话。
 - 助手说完后，默认 60 秒没有用户语音则自动结束；可在 15 到 300 秒之间调整。
 - 会话正常结束、失败或超过静默时间后，自动恢复本地唤醒监听。
-- GPT 音频跟随 macOS 系统默认输出；系统选择 HomePod 时使用 HomePod，断开后的回退由 macOS 负责。
+- GPT 音频跟随 macOS 系统默认输出；系统选择 HomePod 时优先使用 HomePod，HomePod 被其他设备占用或不可用时不强制抢占，继续使用 macOS 当前可用输出并提示用户。
 - GitHub Actions 从公开 fork 构建 arm64 DMG、ZIP 和 SHA-256 校验文件。
 - 在当前 M4 MacBook 完成调试，再通过 Mac mini 长时间运行验收。
 
@@ -168,6 +168,7 @@ interface MikoSettingsV1 {
 - 启动/暂停唤醒监听，结束当前对话。
 - 启动/取消 Codex device auth，不暴露 auth 文件内容。
 - 打开声音设置、打开主窗口、管理登录启动。
+- 触发用户主动的脱敏诊断导出；诊断不包含音频、auth 文件或 token。
 - 订阅和取消订阅 typed status、wake、device、auth、error 事件。
 
 不能向 renderer 暴露原始 Node.js、文件系统、shell 或不受限制的 IPC。
@@ -235,8 +236,19 @@ error
 - Codex 未登录或认证过期：暂停并打开认证步骤。
 - GPT Live 连接失败：沿用现有有限重连；最终失败后释放麦克风并恢复 KWS。
 - Manager 崩溃：结束当前会话，有限退避重启；Manager 恢复健康前 KWS 保持暂停。
-- HomePod 或输出设备变化：更新状态，不主动中断会话；输出回退交给 macOS。
+- HomePod 或输出设备变化：更新状态，不主动中断会话；不调用私有 AirPlay API 强制踢出其他设备。Live 期间检测到系统输出路由变化时发送通知，继续跟随 macOS 当前输出。
 - Docker 不可用：仅标记 DAG 能力 degraded，唤醒和 GPT Live 继续工作。
+
+### 6.4 HomePod 被其他设备占用时的策略
+
+HomePod 是首选输出，但不是必须输出。macOS 公共接口可以选择当前系统 AirPlay 输出，却不能可靠地告诉第三方 App“另一台 Mac 或 Apple TV 正在占用 HomePod”，也不能保证强制夺回对方的 AirPlay 会话。因此首版采用保守的 best-effort 策略：
+
+1. 对话开始前和对话过程中都跟随 macOS 当前系统输出；不使用私有 AirPlay API，不自动反复改写用户的声音设置。
+2. 如果 macOS 把输出路由切到本机或其他设备，App 在 Live 期间通知用户并继续对话，不因为 HomePod 暂时不可用而丢失 GPT Live 会话。
+3. 如果系统仍显示“客厅”但另一台设备实际占用 HomePod，公开 API 可能无法区分“路由存在”和“声音确实从 HomePod 播出”；这必须通过 MacBook/Apple TV 实机测试确认，不能把“抢回优先权”写成验收承诺。
+4. 需要绝对不被其他设备打断时，使用连接在 Mac mini 上的 USB/有线音箱；HomePod 继续作为首选的客厅输出。
+
+家庭 App 的“扬声器与电视”访问权限可以限制为“仅共享此家庭成员”并开启“需要密码”，用于减少局域网内的意外投放；这属于访问控制，不等于播放优先级控制。
 
 ## 7. 实施阶段与 To-Do List
 
@@ -260,7 +272,7 @@ error
 - [x] 新增独立的 `homerail_macos` Electron package，不修改或依赖官方私有 desktop 仓库。
 - [x] 在 lockfile 和 runtime manifest 中固定 Electron `43.2.0`、electron-builder `26.15.3`、Node `24.18.0` 和全部 native dependencies。
 - [x] 实现 single instance、context isolation、sandboxed renderer、收敛的 permission handler、菜单栏生命周期、隐藏窗口和干净退出。
-- [ ] 使用现有 HomeRail 视觉资产生成合规的 App icon 和 macOS menu bar template icon。
+- [x] 使用现有 HomeRail 视觉资产配置合规的 App icon 和 macOS menu bar template icon，并完成 1024px/32px 资源检查。
 - [x] 内置 arm64 Node 和构建后的 HomeRail packages；Manager 与静态 Agent UI 只绑定动态选择的 loopback 端口。
 - [x] 使用 App 专用 `HOMERAIL_HOME`、health probe 和有限重启退避，禁止凭据日志。
 - [x] 增加按大小和数量轮转的诊断日志，并在写入前做凭据形态脱敏。
@@ -284,14 +296,15 @@ error
 - [x] 补充 renderer heartbeat 驱动的 live-input lease；租约失效时停止 Live、保持 KWS paused，并提示用户重新唤醒，不自动恢复到不明确的麦克风所有权。
 - [x] 唤醒时自动创建新的 HomeRail voice session，并用指定 USB 输入启动 GPT Live。
 - [x] 实现“结束对话”、可配置静默超时、菜单结束、重连和自动恢复 KWS。
-- [ ] 保留全部工具确认和 destructive-action 保护。
+- [x] 保留全部工具确认和 destructive-action 保护：GPT Live/唤醒语音不会隐式调用 `submitDraft(true)`，仅可通过可见确认控件提交；现有 Manager/Plugin confirmation authority 继续生效。
 - [x] 监测 macOS 系统输出并显示 AirPlay/HomePod 或系统回退状态，不实现私有输出路由。
+- [x] Live 期间检测系统输出路由变化，发送 HomePod/系统回退通知，并继续跟随 macOS 当前输出。
 
 ### Phase 4：首次设置、设置页和诊断
 
 - [x] 增加权限、麦克风选择、本地 KWS 测试、Codex 登录、超时、提示音开关、系统输出状态和登录启动的首次设置。
 - [x] 将 Miko 设置集成进现有 HomeRail UI，并通过菜单栏重新打开设置；不向用户暴露原始 KWS 参数。
-- [ ] 增加可操作系统通知和脱敏诊断导出；菜单栏状态与暂停/恢复/结束/设置命令已完成。
+- [x] 增加可操作系统通知和脱敏诊断导出；菜单栏状态与暂停/恢复/结束/设置命令已完成。
 - [x] 增加设置 schema validation、原子持久化和前向迁移测试。
 - [x] 明确展示隐私边界：首次设置页说明唤醒前音频只在本地，唤醒后的语音才按 HomeRail 规则发送到 GPT Live。
 
@@ -300,12 +313,13 @@ error
 - [x] 运行根目录 typecheck、build，以及 macOS shell 和 Agent UI focused tests。
 - [x] 补跑完整现有 HomeRail CI tests（protocol 306、SDK 35、Manager 1173、Node 189、Worker 332、CLI 257、Agent UI 489，live validator 85；仅既有 Docker/环境相关测试跳过）。
 - [x] 验证打包 App 启动、Manager/UI health、内置 Codex/KWS runtime、sidecar 设备枚举和干净退出。
-- [ ] 补充 Electron preload isolation、permission、settings 和完整 sidecar lifecycle 验证。
+- [x] 补充 Electron permission policy、settings、diagnostic export 和 KWS protocol 单元验证；preload isolation 已通过固定 BrowserWindow 配置与 source review，完整 Electron lifecycle E2E 仍待补充。
 - [ ] 使用 mock 完成 wake、connect、conversation、timeout、voice command、disconnect、reconnect 和 fatal recovery 的端到端状态测试。
 - [ ] 使用“米可”正样本及普通对话/电视负样本测试三档灵敏度。
-- [x] 本地构建 arm64 App，检查 bundle、nested native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（DMG `6501f26817b3bcb1582a15313e8e11a364ece24fcff4da658be1195af4503bc8`，ZIP `00778838b913f1cafe4695a26cabfa3a1d573128bb26ad6973a33d51824aeb3b`）。
+- [x] 本地构建 arm64 App，检查 `icon.icns`、nested arm64 native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（DMG `9ef62d729242e31063ceecd5c348834ca302a94d4dd4b195661dcbe7f8a358bd`，ZIP `cfb2d2fc706f3cf7ed84b1ced123ce1e56d7c7fba1b211e4255df20f22f0ce6c`）。
 - [ ] 整包安装，完成真实 Codex device auth 和 GPT Live 对话。
 - [ ] 在当前 MacBook 先用内置麦克风唤醒，并将 GPT Live 音频输出到“客厅”HomePod，完成真实链路验收。
+- [ ] 在 MacBook/Apple TV 主动播放占用“客厅”时分别验证：HomeRail 不强制踢出对方、Live 不崩溃、系统回退通知可见且对话能继续。
 - [ ] 验证 HomePod 输出、系统回退、麦克风交接、登录启动、关闭隐藏、退出重启和无 Docker 运行。
 
 ### Phase 6：GitHub 构建和发布
@@ -356,6 +370,7 @@ error
 | 超时前用户说话 | 计时器取消或重置，对话继续 |
 | USB 麦克风拔出再插入 | 暂停并通知，只有同一设备恢复监听 |
 | HomePod 断开 | macOS 回退继续，App 更新状态且不崩溃 |
+| HomePod 被 MacBook/Apple TV 占用 | 不承诺强制抢占；检测到系统路由变化时通知并继续使用当前系统输出；实际是否被另一发送端静音需实机记录 |
 | 网络中断 | 执行有限重连；最终失败后释放麦克风并恢复 KWS |
 | Codex auth 过期 | 暂停并打开认证；日志不出现凭据内容 |
 | Docker 停止 | 唤醒和 GPT Live 正常，仅 DAG/Worker 显示 degraded |
@@ -381,6 +396,7 @@ error
 | 风险 | 处理方式 |
 | --- | --- |
 | HomePod 延迟或客厅回声影响识别 | GPT Live 期间不运行 KWS；启用 Chromium echo processing；校准麦克风位置和灵敏度 |
+| 其他设备占用 HomePod | 不使用私有 AirPlay API；跟随 macOS 路由，路由变化通知并保留本机/USB 输出回退；需要绝对可靠时使用有线音箱 |
 | USB 与 Chromium 设备 ID 不同或变化 | 保存两类 ID 和名称/group；保守匹配，存在歧义时暂停 |
 | Node 原生模块在升级后失效 | 固定 Node/Electron/addon；KWS 独立进程；发布前执行打包后的 native smoke test |
 | Codex Live capability 或协议变化 | 固定 Codex 版本；探测 `realtime_conversation`；保留 client tests；不支持时 fail closed |
