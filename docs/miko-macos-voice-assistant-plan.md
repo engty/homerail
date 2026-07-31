@@ -310,10 +310,10 @@ error
 ### Phase 6：GitHub 构建和发布
 
 - [x] 新增 fork 自有的 macOS workflow，不包含 actor 限制、私有仓库 token 或 `homerail_desktop` 依赖。
-- [x] Pull request 上执行确定性测试和 unsigned arm64 package smoke test，runner 使用 `macos-15`（run `30639006612` 通过）。
+- [x] Pull request 上执行确定性测试和 unsigned arm64 package smoke test，runner 使用 `macos-15`（run `30639869544` 通过）。
 - [ ] 手动 dispatch 和 `miko-v*` tag 构建 DMG/ZIP，验证内置 Node/Codex/KWS 和架构，并生成 SHA-256。
 - [x] 第三方 Actions 固定到 commit SHA；除 tag release job 外使用只读权限。
-- [x] 上传 CI artifacts（push run `30639006476` 已生成 DMG、ZIP 和 SHA-256）。
+- [x] 上传 CI artifacts（push run `30639865456` 已生成 DMG、ZIP 和 SHA-256）。
 - [ ] 创建 `miko-v0.1.0` GitHub prerelease，写明安装、Gatekeeper、隐私和限制。
 - [ ] 从 `codex/miko-macos-app` 向 `engty/homerail` 创建 PR，检查精确 diff，全部 checks 通过后合并。
 
