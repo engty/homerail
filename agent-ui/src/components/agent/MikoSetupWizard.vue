@@ -206,7 +206,7 @@ onUnmounted(() => unsubscribe?.())
       <header class="border-b border-[var(--hr-border)] px-7 py-6">
         <p class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--hr-accent)]">HomeRail Miko</p>
         <h1 class="text-2xl font-semibold">完成首次语音设置</h1>
-        <p class="mt-2 text-sm text-[var(--hr-text-3)]">唤醒前的音频只在本机做“米可”检测；进入 GPT Live 后，语音会按 HomeRail 的现有规则发送。</p>
+        <p class="mt-2 text-sm text-[var(--hr-text-3)]">唤醒前的音频只在本机做“米可”检测；进入 GPT Live 后，语音才会发送到 GPT Live，并按 HomeRail 的现有确认规则处理。</p>
       </header>
 
       <div class="grid gap-5 px-7 py-6 md:grid-cols-2">
@@ -238,6 +238,7 @@ onUnmounted(() => unsubscribe?.())
 
           <div>
             <h2 class="mb-2 font-medium">3. Codex 登录</h2>
+            <p class="mb-2 text-xs text-[var(--hr-text-3)]">点击后会启动一次 Codex device auth，引导你在浏览器完成授权；不需要手动填写 API Key，登录凭据由 Codex 保存在本机。</p>
             <p class="text-xs text-[var(--hr-text-3)]">状态：{{ !status?.codexLoggedIn ? '未登录' : !status?.codexLiveSupported ? '已登录，但当前版本不支持 GPT Live' : status?.codexLiveEffective ? '已登录，GPT Live 配置已生效' : '已登录，请先在 HomeRail 中启用 Codex GPT Live' }}</p>
             <button class="mt-3 rounded-lg border border-[var(--hr-border)] px-3 py-2 text-sm disabled:opacity-45" :disabled="startingAuth || status?.codexLoggedIn" @click="startAuth">{{ startingAuth ? '启动中…' : status?.codexLoggedIn ? '已完成登录' : '开始设备登录' }}</button>
             <button v-if="status?.codexLoggedIn && status?.codexLiveSupported && !status?.codexLiveEffective" class="ml-2 rounded-lg border border-[var(--hr-border)] px-3 py-2 text-sm" @click="api()?.openHomeRail()">打开 HomeRail GPT Live 设置</button>

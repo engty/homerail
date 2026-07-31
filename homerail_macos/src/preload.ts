@@ -11,6 +11,7 @@ const api: MikoDesktopApi = {
   startWakeListening: () => ipcRenderer.invoke('miko:start-wake-listening'),
   startKwsTest: () => ipcRenderer.invoke('miko:start-kws-test'),
   setLiveSessionActive: (active: boolean) => ipcRenderer.invoke('miko:set-live-active', active),
+  renewLiveSessionLease: () => ipcRenderer.invoke('miko:renew-live-lease'),
   pauseWakeListening: () => ipcRenderer.invoke('miko:pause-wake-listening'),
   endConversation: () => ipcRenderer.invoke('miko:end-conversation'),
   startCodexAuth: () => ipcRenderer.invoke('miko:start-codex-auth'),

@@ -281,7 +281,7 @@ error
 - [x] 新增 typed preload bridge 和 desktop-only UI event handling。
 - [x] 唤醒进入 GPT Live 前等待 KWS pause acknowledgement，避免两路同时申请麦克风。
 - [x] GPT Live 启动前释放桌面 KWS 输入，连接成功后更新 `liveSessionActive` 菜单栏状态；失败时结束会话并自动恢复监听。
-- [ ] 补充 renderer 崩溃或所有权不明确时的 live-input lease，并 fail closed 到暂停状态。
+- [x] 补充 renderer heartbeat 驱动的 live-input lease；租约失效时停止 Live、保持 KWS paused，并提示用户重新唤醒，不自动恢复到不明确的麦克风所有权。
 - [x] 唤醒时自动创建新的 HomeRail voice session，并用指定 USB 输入启动 GPT Live。
 - [x] 实现“结束对话”、可配置静默超时、菜单结束、重连和自动恢复 KWS。
 - [ ] 保留全部工具确认和 destructive-action 保护。
@@ -293,7 +293,7 @@ error
 - [ ] 将 Miko 设置集成进现有 HomeRail 设置体验，不向用户暴露原始 KWS 参数。
 - [ ] 增加菜单栏状态和命令、可操作通知和脱敏诊断导出。
 - [x] 增加设置 schema validation、原子持久化和前向迁移测试。
-- [ ] 明确展示隐私边界：唤醒前音频只在本地，唤醒后的语音发送到 GPT Live。
+- [x] 明确展示隐私边界：首次设置页说明唤醒前音频只在本地，唤醒后的语音才按 HomeRail 规则发送到 GPT Live。
 
 ### Phase 5：当前 M4 MacBook 验证
 
@@ -332,9 +332,12 @@ error
 
 - [ ] 准备一只兼容 macOS 的 USB 全向会议麦克风。开发可先用 MacBook 麦克风，最终校准必须使用真实设备。
 - [x] 当前 MacBook 调试设备已确认：MacBook 内置麦克风作为输入，系统输出“客厅”作为 HomePod AirPlay 输出；Mac mini 最终替换为 USB 全向会议麦克风。
+- [x] 已确认 Mac mini 使用 macOS 15 或更高版本。
+- [x] 已确认登录 macOS 后自动开始监听“米可”。
 - [ ] 麦克风放在正常说话清晰、但不紧贴或正对 HomePod 的位置。
+- [x] 已确认采用 App 内置 Codex device auth 引导；仍需用户在安装后完成一次真实登录。
 - [ ] 确认 OpenAI/Codex 账号可以使用 GPT Live，并亲自完成一次 device auth；不共享 auth 文件或 token。
-- [ ] 确认 Mac mini 为 Apple Silicon、macOS 15+，并有足够空间存放 App、runtime、模型和日志。
+- [ ] 确认 Mac mini 为 Apple Silicon，并有足够空间存放 App、runtime、模型和日志。
 - [ ] 根据长期运行需要手动配置 Mac mini 保持唤醒，并可选配置断电后自动开机；App 不擅自修改电源策略。
 - [ ] 需要 HomePod 输出时，在 macOS 控制中心或声音设置中选择 HomePod。
 - [ ] 批准麦克风权限、Login Item 和首个未公证版本的 Gatekeeper 例外。

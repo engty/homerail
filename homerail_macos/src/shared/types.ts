@@ -65,6 +65,7 @@ export type MikoEvent =
   | { type: 'runtime-log'; stream: 'stdout' | 'stderr'; line: string }
   | { type: 'kws'; event: KwsEvent }
   | { type: 'kws-test-wake'; detectedAt: number }
+  | { type: 'live-input-lease-expired' }
   | { type: 'conversation-end-requested' }
   | { type: 'codex-auth'; stream: 'stdout' | 'stderr'; line: string }
   | { type: 'codex-auth-status'; state: 'started' | 'completed' | 'failed'; code?: number | null; signal?: string | null }
@@ -82,6 +83,7 @@ export interface MikoDesktopApi {
   startWakeListening(): Promise<MikoAppStatus>
   startKwsTest(): Promise<MikoAppStatus>
   setLiveSessionActive(active: boolean): Promise<MikoAppStatus>
+  renewLiveSessionLease(): Promise<MikoAppStatus>
   pauseWakeListening(): Promise<MikoAppStatus>
   endConversation(): Promise<MikoAppStatus>
   startCodexAuth(): Promise<{ started: boolean; message: string }>

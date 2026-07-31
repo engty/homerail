@@ -123,6 +123,7 @@ describe('AgentVoiceCockpit responsive layout', () => {
     )
     expect(startLive).toContain('await desktop?.pauseWakeListening?.()')
     expect(startLive).toContain('await desktop?.setLiveSessionActive?.(true)')
+    expect(startLive).toContain('startLiveInputLeaseHeartbeat()')
     expect(startLive).toContain('void desktop?.endConversation?.().catch(() => undefined)')
     expect(startLive.indexOf('await desktop?.pauseWakeListening?.()')).toBeLessThan(
       startLive.indexOf('await client.start()'),
@@ -130,6 +131,9 @@ describe('AgentVoiceCockpit responsive layout', () => {
     expect(startLive.indexOf('await client.start()')).toBeLessThan(
       startLive.indexOf('await desktop?.setLiveSessionActive?.(true)'),
     )
+    expect(cockpitSource).toContain("event?.type === 'live-input-lease-expired'")
+    expect(cockpitSource).toContain('void stopCodexLiveVoice(false)')
+    expect(cockpitSource).toContain('api.renewLiveSessionLease()')
   })
 
   it('uses the main voice button as the only Live Voice start and stop control', () => {
