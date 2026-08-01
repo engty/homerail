@@ -136,6 +136,19 @@ describe('AgentVoiceCockpit responsive layout', () => {
     expect(cockpitSource).toContain('mikoLiveSessionController.stopHeartbeat()')
   })
 
+  it('routes the desktop wake/live lifecycle through the tested Miko flow policy', () => {
+    expect(cockpitSource).toContain("import { MikoVoiceFlow } from '@/agent/miko-voice-flow'")
+    expect(cockpitSource).toContain('const mikoVoiceFlow = new MikoVoiceFlow(')
+    expect(cockpitSource).toContain('if (!mikoVoiceFlow.beginWake()) return')
+    expect(cockpitSource).toContain('mikoVoiceFlow.beginConnecting()')
+    expect(cockpitSource).toContain('mikoVoiceFlow.connected()')
+    expect(cockpitSource).toContain("mikoVoiceFlow.consumeTranscript('user', text)")
+    expect(cockpitSource).toContain('mikoVoiceFlow.beginAssistantTurn()')
+    expect(cockpitSource).toContain("mikoVoiceFlow.requestEnd('menu')")
+    expect(cockpitSource).toContain('mikoVoiceFlow.fatalError()')
+    expect(cockpitSource).toContain('mikoVoiceFlow.end()')
+  })
+
   it('never turns a voice suggestion into an implicit task confirmation', () => {
     const sendText = cockpitSource.slice(
       cockpitSource.indexOf('async function sendText('),
