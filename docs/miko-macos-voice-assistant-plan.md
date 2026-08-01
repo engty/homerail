@@ -316,7 +316,8 @@ HomePod 是首选输出，但不是必须输出。macOS 公共接口可以选择
 - [x] 补跑完整现有 HomeRail CI tests（protocol 306、SDK 35、Manager 1173、Node 189、Worker 332、CLI 257、Agent UI 499，live validator 85；仅既有 Docker/环境相关测试跳过）。
 - [x] 验证打包 App 启动、Manager/UI health、内置 Codex/KWS runtime、sidecar 设备枚举和干净退出。
 - [x] 在临时目录下载并校验固定 digest 的 KWS 模型，使用当前 MacBook 内置麦克风完成 CoreML sidecar configure/start/pause/shutdown 流式 smoke；用 sherpa 官方样本和本地 TTS 验证 `m ǐ k ě @MIKO` 配置；未把模型或音频写入仓库。
-- [x] 补充 Electron permission policy、settings、diagnostic export 和 KWS protocol 单元验证；preload isolation 已通过固定 BrowserWindow 配置与 source review，完整 Electron lifecycle E2E 仍待补充。
+- [x] 补充 Electron permission policy、settings、diagnostic export 和 KWS protocol 单元验证；preload isolation 已通过固定 BrowserWindow 配置与 source review，完整交互式 Electron lifecycle E2E 仍待补充。
+- [x] 增加打包 App 的 Electron lifecycle smoke：启动内置 Manager/UI、检查 health/HTML 响应、发送 SIGTERM 并确认 runtime 端口关闭；本地与 GitHub Actions 均执行 `packaged-lifecycle-smoke.mjs`。
 - [x] 使用 `MikoVoiceFlow` mock 完成 wake、connect、conversation、timeout、voice command、disconnect、reconnect 和 fatal recovery 状态测试；组件已接入同一策略，避免设置读取延迟在用户发言后错误创建静默计时器。
 - [ ] 使用“米可”正样本及普通对话/电视负样本测试三档灵敏度（已用 sherpa 官方中英文样本与 Mac 本地 TTS 完成模型/provider 冒烟，仍需真人客厅样本）。
 - [x] 本地构建 arm64 App，检查 `icon.icns`、nested arm64 native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（最新 DMG `54c56ed65ca8d8652d5f088828faee6f9056e28f93b2025544373634f5c6820d`，ZIP `217eaae5e59dee2f9934c48d57543b337c590e4a0d206705d02cde3064cb2e53`；打包 App health/UI smoke 通过）。

@@ -81,6 +81,14 @@ jobs:
             "$runtime/node/bin/node" "$app/Contents/Resources/miko-kws/kws-sidecar.js" |
             grep -F '"type":"devices"'
 
+      - name: Smoke packaged Electron lifecycle
+        working-directory: homerail_macos
+        env:
+          HOMERAIL_MIKO_MANAGER_PORT: "29491"
+          HOMERAIL_MIKO_UI_HTTPS_PORT: "29492"
+          HOMERAIL_MIKO_UI_HTTP_PORT: "29493"
+        run: node scripts/packaged-lifecycle-smoke.mjs "dist-electron/mac-arm64/HomeRail Miko.app/Contents/MacOS/HomeRail Miko"
+
       - name: Write SHA-256 checksums
         working-directory: homerail_macos/dist-electron
         run: |
