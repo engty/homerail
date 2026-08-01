@@ -322,6 +322,7 @@ HomePod 是首选输出，但不是必须输出。macOS 公共接口可以选择
 - [ ] 使用“米可”正样本及普通对话/电视负样本测试三档灵敏度（已用 sherpa 官方中英文样本与 Mac 本地 TTS 完成模型/provider 冒烟，仍需真人客厅样本）。
 - [x] 本地构建 arm64 App，检查 `icon.icns`、nested arm64 native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（最新本地 DMG `54c56ed65ca8d8652d5f088828faee6f9056e28f93b2025544373634f5c6820d`，ZIP `217eaae5e59dee2f9934c48d57543b337c590e4a0d206705d02cde3064cb2e53`；打包 App health/UI smoke 通过）。
 - [x] CI 对当前 `7cf3771` 执行完整 arm64 打包、runtime 校验、Electron lifecycle smoke 和 artifact 上传（run `30708502122`，全部通过）。
+- [x] 在当前 MacBook 下载 run `30708502122` artifact，验证 DMG/ZIP SHA-256 并再次运行打包 App lifecycle smoke；DMG `ef650819f3727f555b3aaa7c9d74e5e36d098bbc2c3eb295d78fccaaab2f1826`，ZIP `a1df4a59c45b81a5e50f6256432147af47aa70f3e57c52779d5c25e083798aae`。
 - [ ] 整包安装，完成真实 Codex device auth 和 GPT Live 对话。
 - [ ] 在当前 MacBook 先用内置麦克风唤醒，并将 GPT Live 音频输出到“客厅”HomePod，完成真实链路验收。
 - [ ] 在 MacBook/Apple TV 主动播放占用“客厅”时分别验证：HomeRail 不强制踢出对方、Live 不崩溃、系统回退通知可见且对话能继续。
