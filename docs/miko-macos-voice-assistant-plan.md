@@ -329,9 +329,9 @@ HomePod 是首选输出，但不是必须输出。macOS 公共接口可以选择
 
 - [x] 新增 fork 自有的 macOS workflow，不包含 actor 限制、私有仓库 token 或 `homerail_desktop` 依赖。
 - [x] Pull request 上执行确定性测试和 unsigned arm64 package smoke test，runner 使用 `macos-15`（run `30643999696`，head `374c2a3`，通过）。
-- [x] 手动 dispatch 构建 DMG/ZIP，验证内置 Node/Codex/KWS 和架构，并生成 SHA-256（run `30668340260`，成功；`miko-v*` tag 发布仍待真实联调后执行）。
+- [x] 手动 dispatch 构建 DMG/ZIP，验证内置 Node/Codex/KWS 和架构，并生成 SHA-256（最新 run `30699834217`，head `4c24404`，成功；`miko-v*` tag 发布仍待真实联调后执行）。
 - [x] 第三方 Actions 固定到 commit SHA；除 tag release job 外使用只读权限。
-- [x] 上传 CI artifacts（workflow dispatch run `30668340260`，head `6923125`，已生成 DMG、ZIP 和 SHA-256；artifact 已上传且未过期）。
+- [x] 上传 CI artifacts（workflow dispatch run `30699834217`，head `4c24404`，已生成 DMG、ZIP 和 SHA-256；artifact 已上传且未过期）。
 - [ ] 创建 `miko-v0.1.0` GitHub prerelease，写明安装、Gatekeeper、隐私和限制。
 - [x] 已从 `codex/miko-macos-app` 创建 draft PR，精确 diff 和全部 checks 已通过；合并仍待真实设备联调完成后执行。
 
