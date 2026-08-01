@@ -10,7 +10,10 @@ const uiUrl = `http://127.0.0.1:${uiPort}`
 const output = []
 
 function record(chunk) {
-  const text = String(chunk || '').replace(/\s+/g, ' ').trim()
+  const text = String(chunk || '')
+    .replace(/\s+/g, ' ')
+    .replace(/(token|api[_-]?key|password|secret)=\S+/gi, '$1=[redacted]')
+    .trim()
   if (text) output.push(text.slice(-1_000))
   if (output.length > 20) output.shift()
 }
