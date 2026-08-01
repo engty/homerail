@@ -3877,7 +3877,6 @@ function handleCodexLiveVoiceEvent(event: CodexLiveVoiceEvent): void {
     const text = typeof event.text === 'string' ? event.text.trim() : ''
     const role = String(event.role || '').toLowerCase()
     if (role === 'user') {
-      mikoVoiceFlow.userActivity()
       liveTranscript.value = text
       lastUserTranscript.value = text
       const normalized = normalizeVoiceTranscriptForDuplicate(text)
