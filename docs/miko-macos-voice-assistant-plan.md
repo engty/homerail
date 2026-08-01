@@ -320,7 +320,8 @@ HomePod 是首选输出，但不是必须输出。macOS 公共接口可以选择
 - [x] 增加打包 App 的 Electron lifecycle smoke：启动内置 Manager/UI、检查 health/HTML 响应、发送 SIGTERM 并确认 runtime 端口关闭；本地与 GitHub Actions 均执行 `packaged-lifecycle-smoke.mjs`。
 - [x] 使用 `MikoVoiceFlow` mock 完成 wake、connect、conversation、timeout、voice command、disconnect、reconnect 和 fatal recovery 状态测试；组件已接入同一策略，避免设置读取延迟在用户发言后错误创建静默计时器。
 - [ ] 使用“米可”正样本及普通对话/电视负样本测试三档灵敏度（已用 sherpa 官方中英文样本与 Mac 本地 TTS 完成模型/provider 冒烟，仍需真人客厅样本）。
-- [x] 本地构建 arm64 App，检查 `icon.icns`、nested arm64 native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（最新 DMG `54c56ed65ca8d8652d5f088828faee6f9056e28f93b2025544373634f5c6820d`，ZIP `217eaae5e59dee2f9934c48d57543b337c590e4a0d206705d02cde3064cb2e53`；打包 App health/UI smoke 通过）。
+- [x] 本地构建 arm64 App，检查 `icon.icns`、nested arm64 native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（最新本地 DMG `54c56ed65ca8d8652d5f088828faee6f9056e28f93b2025544373634f5c6820d`，ZIP `217eaae5e59dee2f9934c48d57543b337c590e4a0d206705d02cde3064cb2e53`；打包 App health/UI smoke 通过）。
+- [x] CI 对当前 `7cf3771` 执行完整 arm64 打包、runtime 校验、Electron lifecycle smoke 和 artifact 上传（run `30708502122`，全部通过）。
 - [ ] 整包安装，完成真实 Codex device auth 和 GPT Live 对话。
 - [ ] 在当前 MacBook 先用内置麦克风唤醒，并将 GPT Live 音频输出到“客厅”HomePod，完成真实链路验收。
 - [ ] 在 MacBook/Apple TV 主动播放占用“客厅”时分别验证：HomeRail 不强制踢出对方、Live 不崩溃、系统回退通知可见且对话能继续。
@@ -331,6 +332,7 @@ HomePod 是首选输出，但不是必须输出。macOS 公共接口可以选择
 - [x] 新增 fork 自有的 macOS workflow，不包含 actor 限制、私有仓库 token 或 `homerail_desktop` 依赖。
 - [x] Pull request 上执行确定性测试和 unsigned arm64 package smoke test，runner 使用 `macos-15`（run `30643999696`，head `374c2a3`，通过）。
 - [x] 手动 dispatch 构建 DMG/ZIP，验证内置 Node/Codex/KWS 和架构，并生成 SHA-256（最新 run `30699834217`，head `4c24404`，成功；`miko-v*` tag 发布仍待真实联调后执行）。
+- [x] push/PR 构建继续验证同一产物链路，最新 run `30708502122`（head `7cf3771`）包含 Electron lifecycle smoke 并成功上传 artifact。
 - [x] 第三方 Actions 固定到 commit SHA；除 tag release job 外使用只读权限。
 - [x] 上传 CI artifacts（workflow dispatch run `30699834217`，head `4c24404`，已生成 DMG、ZIP 和 SHA-256；artifact 已上传且未过期）。
 - [ ] 创建 `miko-v0.1.0` GitHub prerelease，写明安装、Gatekeeper、隐私和限制。
