@@ -7,7 +7,9 @@ import { spawn } from 'node:child_process'
 export const KWS_MODEL_NAME = 'sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20'
 export const KWS_MODEL_URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/${KWS_MODEL_NAME}.tar.bz2`
 export const KWS_MODEL_SHA256 = '68447f4fbc67e70eee3a93961f36e81e98f47aef73ce7e7ca00885c6cd3616a6'
-export const KWS_KEYWORD_LINE = 'M IY1 K OW0 @MIKO'
+// Use Mandarin pinyin so the wake word matches the Chinese pronunciation,
+// rather than the English name pronunciation.
+export const KWS_KEYWORD_LINE = 'm ǐ k ě @MIKO'
 
 const REQUIRED_MODEL_FILES = [
   'encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx',

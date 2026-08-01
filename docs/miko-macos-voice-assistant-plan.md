@@ -32,7 +32,7 @@
 | App 身份 | 显示名 `HomeRail Miko`，bundle identifier 为 `com.engty.homerailmiko` |
 | 支持平台 | 仅 Apple Silicon，最低 macOS 15 |
 | 唤醒词 | 固定为 `Miko`，首版不支持任意词编辑 |
-| 唤醒发音 | 中文“米可”，音素配置 `M IY1 K OW0 @MIKO` |
+| 唤醒发音 | 中文“米可”，关键词配置 `m ǐ k ě @MIKO`（由 sherpa-onnx `phone+ppinyin` 规则生成） |
 | 唤醒引擎 | 离线 `sherpa-onnx`，不使用需要 AccessKey 的云服务 |
 | 输入设备 | 用户明确选择的外置 USB 麦克风 |
 | 当前 MacBook 调试组合 | 使用 MacBook 内置麦克风作为输入；macOS 音频输出选择“客厅”（HomePod AirPlay） |
@@ -110,10 +110,10 @@ flowchart LR
   sha256:68447f4fbc67e70eee3a93961f36e81e98f47aef73ce7e7ca00885c6cd3616a6
   ```
 
-- 只生成一个关键词：
+- 只生成一个中文关键词（使用 sherpa-onnx 官方 `phone+ppinyin` 规则）：
 
   ```text
-  M IY1 K OW0 @MIKO
+  m ǐ k ě @MIKO
   ```
 
 - 以设备原生采样率读取 mono float 音频，在内存中重采样到 16 kHz，不写入磁盘。
@@ -250,6 +250,8 @@ HomePod 是首选输出，但不是必须输出。macOS 公共接口可以选择
 
 家庭 App 的“扬声器与电视”访问权限可以限制为“仅共享此家庭成员”并开启“需要密码”，用于减少局域网内的意外投放；这属于访问控制，不等于播放优先级控制。
 
+已核对 Apple 的相关路由 API：`AVAudioRoutingArbiter` 面向 AirPods Automatic Switching，只对部分 Apple/Beats 蓝牙耳机生效，不是 HomePod AirPlay 抢占接口；`AVRoutingPlaybackArbiter` 解决的是同一个 App 内多个播放器在不可混音外部路由上的选择，也不提供跨 Mac/Apple TV 发送端的夺回权限。因此不把这两个 API 作为“抢回客厅 HomePod”的实现依据。
+
 ## 7. 实施阶段与 To-Do List
 
 以下清单是唯一权威进度。实施过程中直接更新复选框和文档顶部状态，不另建一套任务状态。
@@ -283,7 +285,7 @@ HomePod 是首选输出，但不是必须输出。macOS 公共接口可以选择
 
 - [x] 新增 KWS sidecar、typed NDJSON 协议、generation guard、进程监管和单元测试。
 - [x] 实现模型下载、固定 URL/digest 校验和 license/redistribution gate。
-- [x] 实现 16 kHz streaming、resampling、“米可”配置、三档灵敏度、唤醒限流和纯本地音频处理。
+- [x] 实现 16 kHz streaming、resampling、“米可”配置、三档灵敏度、唤醒限流和纯本地音频处理；Apple Silicon 使用 CoreML execution provider。
 - [x] 实现 native 输入枚举、指定设备持久化、断开检测、通知和同设备恢复（物理拔插验收待在真实 USB 麦克风上执行）。
 - [x] 实现不会启动 GPT Live 的本地 KWS 测试模式（提示音、KWS 音量表和“米可”检测反馈已完成）。
 
@@ -313,10 +315,10 @@ HomePod 是首选输出，但不是必须输出。macOS 公共接口可以选择
 - [x] 运行根目录 typecheck、build，以及 macOS shell 和 Agent UI focused tests。
 - [x] 补跑完整现有 HomeRail CI tests（protocol 306、SDK 35、Manager 1173、Node 189、Worker 332、CLI 257、Agent UI 489，live validator 85；仅既有 Docker/环境相关测试跳过）。
 - [x] 验证打包 App 启动、Manager/UI health、内置 Codex/KWS runtime、sidecar 设备枚举和干净退出。
-- [x] 在临时目录下载并校验固定 digest 的 KWS 模型，使用当前 MacBook 内置麦克风完成 sidecar configure/start/pause/shutdown 流式 smoke；未把模型或音频写入仓库。
+- [x] 在临时目录下载并校验固定 digest 的 KWS 模型，使用当前 MacBook 内置麦克风完成 CoreML sidecar configure/start/pause/shutdown 流式 smoke；用 sherpa 官方样本和本地 TTS 验证 `m ǐ k ě @MIKO` 配置；未把模型或音频写入仓库。
 - [x] 补充 Electron permission policy、settings、diagnostic export 和 KWS protocol 单元验证；preload isolation 已通过固定 BrowserWindow 配置与 source review，完整 Electron lifecycle E2E 仍待补充。
 - [ ] 使用 mock 完成 wake、connect、conversation、timeout、voice command、disconnect、reconnect 和 fatal recovery 的端到端状态测试。
-- [ ] 使用“米可”正样本及普通对话/电视负样本测试三档灵敏度。
+- [ ] 使用“米可”正样本及普通对话/电视负样本测试三档灵敏度（已用 sherpa 官方中英文样本与 Mac 本地 TTS 完成模型/provider 冒烟，仍需真人客厅样本）。
 - [x] 本地构建 arm64 App，检查 `icon.icns`、nested arm64 native binaries、Codex/KWS runtime、麦克风说明和 unsigned package smoke（DMG `9ef62d729242e31063ceecd5c348834ca302a94d4dd4b195661dcbe7f8a358bd`，ZIP `cfb2d2fc706f3cf7ed84b1ced123ce1e56d7c7fba1b211e4255df20f22f0ce6c`）。
 - [ ] 整包安装，完成真实 Codex device auth 和 GPT Live 对话。
 - [ ] 在当前 MacBook 先用内置麦克风唤醒，并将 GPT Live 音频输出到“客厅”HomePod，完成真实链路验收。

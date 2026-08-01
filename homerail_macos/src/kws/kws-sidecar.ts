@@ -117,7 +117,10 @@ function createSpotter(modelDir: string, sensitivity: ConfiguredState['sensitivi
       transducer: { encoder: paths.encoder, decoder: paths.decoder, joiner: paths.joiner },
       tokens: paths.tokens,
       numThreads: 1,
-      provider: 'cpu',
+      // CoreML is the supported execution provider on the Apple Silicon
+      // targets. The model's int8 encoder/joiner are compatible with it and
+      // avoid the CPU provider's incorrect keyword scores on macOS arm64.
+      provider: 'coreml',
     },
     maxActivePaths: 4,
     numTrailingBlanks: 1,
