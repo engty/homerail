@@ -431,3 +431,88 @@ HomePod 是首选输出，但不是必须输出。macOS 公共接口可以选择
 - M4 MacBook 验证结果
 - Mac mini 硬件、macOS 和麦克风信息
 - Soak test 结果及剩余已知限制
+
+## 12. Mac mini 开发交接流程
+
+Mac mini 不需要复制 MacBook 的工作目录。GitHub fork 是唯一共享代码来源，MacBook 和 Mac mini 各自保留一个工作副本，通过同一个开发分支同步。不要复制 `.env`、Codex auth 文件、token 或 `~/Library/Application Support` 中的认证数据。
+
+### 12.1 第一次准备
+
+在 Mac mini 上先确认：
+
+```bash
+git --version
+node --version
+npm --version
+uname -m
+sw_vers -productVersion
+```
+
+要求 Apple Silicon、macOS 15 或更高版本；构建 macOS 壳时使用 Node 24.18.0（最低 engine 为 22.12）。如果没有 Xcode Command Line Tools，执行 `xcode-select --install`。Docker Desktop 只在运行 DAG/Worker 时需要，不影响普通 GPT Live。
+
+### 12.2 克隆 fork 并切换开发分支
+
+推荐使用 GitHub CLI 完成登录；也可以改用已配置好的 SSH URL：
+
+```bash
+gh auth login
+gh auth setup-git
+mkdir -p ~/Projects
+git clone https://github.com/engty/homerail.git ~/Projects/homerail
+cd ~/Projects/homerail
+git fetch origin
+git switch --track origin/codex/miko-macos-app
+git remote add upstream https://github.com/xiaotianfotos/homerail.git
+git status
+```
+
+首次检查应看到干净工作区和 `codex/miko-macos-app` 分支。当前已验证的代码提交为 `7cf3771`；后续只要从 `origin` 拉取最新提交即可，不要直接在 `upstream/main` 上开发。
+
+### 12.3 安装依赖与本地验证
+
+```bash
+cd ~/Projects/homerail
+npm run install:all
+npm --prefix homerail_macos install --package-lock=false --omit=optional --no-audit --no-fund
+npm run typecheck
+npm --prefix agent-ui test
+npm --prefix homerail_macos run typecheck
+npm --prefix homerail_macos test
+```
+
+开发阶段可以先用 `npm --prefix homerail_macos run dev` 启动壳；需要生成可安装 App 时执行：
+
+```bash
+npm --prefix homerail_macos run dist:ci
+```
+
+生成的 unsigned arm64 产物位于 `homerail_macos/dist-electron/`。开发源码目录和 `/Applications/HomeRail Miko.app` 应分开，不要一边运行已安装 App 一边运行同端口的 dev 壳；否则可能发生 runtime 端口或麦克风所有权冲突。
+
+### 12.4 在 Mac mini 上继续开发的同步规则
+
+开始工作前：
+
+```bash
+cd ~/Projects/homerail
+git pull --ff-only origin codex/miko-macos-app
+```
+
+完成一个可回退的小改动后：
+
+```bash
+git add <changed-files>
+git commit -m "describe the change"
+git push origin codex/miko-macos-app
+```
+
+推送后 Draft PR 会自动更新，GitHub Actions 会重新构建 arm64 App。MacBook 继续开发前同样先执行 `git pull --ff-only`；不要在两台机器同时修改同一个文件后再互相覆盖。
+
+### 12.5 首次安装与 GPT Live 验证顺序
+
+1. 优先从 GitHub Actions 下载已验证的 DMG/ZIP，而不是直接运行未构建的源码。
+2. 安装到 `/Applications`，首次启动按 macOS 提示手动放行未公证 App。
+3. 在 Miko 设置中授予麦克风权限、选择 USB 麦克风，并完成本地“米可”测试。
+4. 在 App 内执行 Codex device auth；MacBook 上的 Codex 登录状态不会作为凭据复制过去，也不要手动复制 auth 文件。
+5. 在 macOS 声音设置中选择“客厅”HomePod，完成一次 GPT Live 对话后再启用登录自动监听。
+6. 先验证 HomePod 空闲，再验证 MacBook/Apple TV 占用 HomePod 的 best-effort 回退行为。
+7. 真实设备通过后，才创建 `miko-v0.1.0` prerelease 并进行 Mac mini 长时间 soak test。
