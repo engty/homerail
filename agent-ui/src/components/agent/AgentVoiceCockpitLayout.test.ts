@@ -116,6 +116,49 @@ describe('AgentVoiceCockpit responsive layout', () => {
     expect(applyState).toContain("broadcastVoiceActivity('listening')")
   })
 
+  it('hands the desktop microphone from wake detection to GPT Live', () => {
+    const startLive = cockpitSource.slice(
+      cockpitSource.indexOf('async function startCodexLiveVoice(): Promise<void>'),
+      cockpitSource.indexOf('async function stopCodexLiveVoice('),
+    )
+    expect(startLive).toContain('await mikoLiveSessionController.prepareInput()')
+    expect(startLive).toContain('await mikoLiveSessionController.activate()')
+    expect(startLive).toContain('await mikoLiveSessionController.deactivate(false).catch(() => undefined)')
+    expect(startLive.indexOf('await mikoLiveSessionController.prepareInput()')).toBeLessThan(
+      startLive.indexOf('await client.start()'),
+    )
+    expect(startLive.indexOf('await client.start()')).toBeLessThan(
+      startLive.indexOf('await mikoLiveSessionController.activate()'),
+    )
+    expect(cockpitSource).toContain("event?.type === 'live-input-lease-expired'")
+    expect(cockpitSource).toContain("event?.type === 'runtime-error'")
+    expect(cockpitSource).toContain('void stopCodexLiveVoice(false)')
+    expect(cockpitSource).toContain('mikoLiveSessionController.stopHeartbeat()')
+  })
+
+  it('routes the desktop wake/live lifecycle through the tested Miko flow policy', () => {
+    expect(cockpitSource).toContain("import { MikoVoiceFlow } from '@/agent/miko-voice-flow'")
+    expect(cockpitSource).toContain('const mikoVoiceFlow = new MikoVoiceFlow(')
+    expect(cockpitSource).toContain('if (!mikoVoiceFlow.beginWake()) return')
+    expect(cockpitSource).toContain('mikoVoiceFlow.beginConnecting()')
+    expect(cockpitSource).toContain('mikoVoiceFlow.connected()')
+    expect(cockpitSource).toContain("mikoVoiceFlow.consumeTranscript('user', text)")
+    expect(cockpitSource).toContain('mikoVoiceFlow.beginAssistantTurn()')
+    expect(cockpitSource).toContain("mikoVoiceFlow.requestEnd('menu')")
+    expect(cockpitSource).toContain('mikoVoiceFlow.fatalError()')
+    expect(cockpitSource).toContain('mikoVoiceFlow.end()')
+  })
+
+  it('never turns a voice suggestion into an implicit task confirmation', () => {
+    const sendText = cockpitSource.slice(
+      cockpitSource.indexOf('async function sendText('),
+      cockpitSource.indexOf('async function submitCodexTextDraft('),
+    )
+    expect(sendText).toContain('Only the visible confirmation control below may')
+    expect(sendText).not.toContain('await submitDraft(true)')
+    expect(cockpitSource).toContain('data-testid="voice-submit-draft"')
+  })
+
   it('uses the main voice button as the only Live Voice start and stop control', () => {
     expect(cockpitSource).not.toContain('data-testid="codex-live-voice-managed"')
     expect(cockpitSource).not.toContain('data-testid="codex-live-voice-end"')

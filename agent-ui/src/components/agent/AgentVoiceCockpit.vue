@@ -43,6 +43,8 @@ import {
   type CodexLiveVoiceEvent,
   type CodexLiveVoiceState
 } from '@/agent/codex-live-voice-client'
+import { MikoLiveSessionController } from '@/agent/miko-live-session-controller'
+import { MikoVoiceFlow } from '@/agent/miko-voice-flow'
 import GenerativeUiCanonicalSurface from '@/components/generative-ui/GenerativeUiCanonicalSurface.vue'
 import GenerativeUiShadowPreview from '@/components/generative-ui/GenerativeUiShadowPreview.vue'
 import DagTaskCanvas from '@/components/generative-ui/DagTaskCanvas.vue'
@@ -116,7 +118,7 @@ import {
   isBuiltinEdgeTtsSettings
 } from '@/components/agent/builtin-tts'
 import { postAppearanceToArtifactFrame } from '@/appearance/appearance-registry'
-import { createVoiceMediaStream } from '@/utils/voice-audio-input'
+import { createVoiceMediaStream, saveVoiceAudioInputDeviceId } from '@/utils/voice-audio-input'
 import {
   NATIVE_GAMEPAD_ANALOG_EVENT,
   NATIVE_GAMEPAD_BUTTON_EVENT,
@@ -368,6 +370,8 @@ function selectGenerativeUiNode(payload: { node_id: string }): void {
 
 let mediaStream: MediaStream | null = null
 let codexLiveVoiceClient: CodexLiveVoiceClient | null = null
+let mikoDesktopUnsubscribe: (() => void) | null = null
+let mikoWakeStartPromise: Promise<void> | null = null
 let codexLiveVoiceMeterAudioContext: AudioContext | null = null
 let codexLiveVoiceMeterAnalyser: AnalyserNode | null = null
 let codexLiveVoiceMeterSource: MediaStreamAudioSourceNode | null = null
@@ -405,6 +409,17 @@ let asrFinalTimer = 0
 let asrClosing = false
 let lastSubmittedVoiceTranscriptKey = ''
 let lastSubmittedVoiceTranscriptAt = 0
+
+const mikoLiveSessionController = new MikoLiveSessionController(
+  () => mikoDesktopApi(),
+  reason => {
+    error.value = reason.message || 'GPT Live 麦克风会话失去确认，已暂停监听，请重新唤醒'
+    void stopCodexLiveVoice(false)
+  },
+)
+const mikoVoiceFlow = new MikoVoiceFlow({
+  onEndRequested: () => { void stopCodexLiveVoice() },
+})
 let managerStatusTimer = 0
 let voiceStatusUnsub: (() => void) | null = null
 let uninstallGamepadMonitorDebugApi: (() => void) | null = null
@@ -1292,6 +1307,7 @@ onMounted(() => {
   void startSession()
   void loadVoiceRuntime()
   void setupVoiceHidControl()
+  setupMikoDesktopBridge()
   startVoiceGamepadControl()
   void loadVoiceSessionShortcuts()
   installCodexVoiceTextBridge()
@@ -1389,6 +1405,8 @@ onUnmounted(() => {
     pluginRegistryStateUnsub()
     pluginRegistryStateUnsub = null
   }
+  mikoDesktopUnsubscribe?.()
+  mikoDesktopUnsubscribe = null
   // /ws/events is shared with the DAG runtime store; component teardown only
   // removes this cockpit's subscriptions and must not close the singleton.
   if (widgetHighlightTimer) window.clearTimeout(widgetHighlightTimer)
@@ -1407,6 +1425,8 @@ onUnmounted(() => {
   removeFullscreenRetry()
   teardownVoiceHidControl()
   teardownVoiceGamepadControl()
+  clearMikoSilenceTimer()
+  mikoLiveSessionController.dispose()
   if (codexLiveVoiceClient) void stopCodexLiveVoice()
   else stopVoiceCapture()
   teardownTtsCoordination()
@@ -3217,8 +3237,10 @@ async function sendText(text: string, optimisticItemId?: string): Promise<void> 
       suggestedAction = (await handleVoiceStreamEvent(event, optimisticId)) || suggestedAction
     }, turnSignal, selectedNodeId)
     if (suggestedAction === 'confirm') {
+      // A voice turn may surface a pending task confirmation, but it must not
+      // approve the mutation. Only the visible confirmation control below may
+      // call submitDraft(), so wake-word activation cannot authorize tools.
       loading.value = false
-      await submitDraft(true)
     }
   } catch (err: any) {
     // 切换 session 时主动 abort 旧 turn 的 stream，这不是错误，静默退出。
@@ -3806,6 +3828,7 @@ async function playTtsBlob(blob: Blob): Promise<void> {
 }
 
 function applyCodexLiveVoiceState(state: CodexLiveVoiceState): void {
+  mikoVoiceFlow.observeClientState(state)
   const wasActive = codexLiveVoiceSessionActive.value
   codexLiveVoiceState.value = state
   const active = codexLiveVoiceOwnsAudio(state)
@@ -3851,7 +3874,10 @@ function handleCodexLiveVoiceEvent(event: CodexLiveVoiceEvent): void {
   if (event.type === 'transcript.delta') {
     const delta = typeof event.delta === 'string' ? event.delta : ''
     const role = String(event.role || '').toLowerCase()
-    if (role === 'user') liveTranscript.value += delta
+    if (role === 'user') {
+      mikoVoiceFlow.userActivity()
+      liveTranscript.value += delta
+    }
     if (role === 'assistant') spokenText.value += delta
     return
   }
@@ -3866,9 +3892,11 @@ function handleCodexLiveVoiceEvent(event: CodexLiveVoiceEvent): void {
       optimisticConversationItems.value = optimisticConversationItems.value.filter(
         item => normalizeVoiceTranscriptForDuplicate(item.text) !== normalized
       )
+      mikoVoiceFlow.consumeTranscript('user', text)
     } else if (role === 'assistant') {
       spokenText.value = text
       liveTranscript.value = ''
+      scheduleMikoSilenceTimeout()
     }
     return
   }
@@ -3878,8 +3906,10 @@ function handleCodexLiveVoiceEvent(event: CodexLiveVoiceEvent): void {
       ? event.message
       : t('voice.liveVoice.error')
     if (event.recoverable !== true) {
+      mikoVoiceFlow.fatalError()
       stopCodexLiveVoiceMeter()
       codexLiveVoiceMuted.value = false
+      void stopCodexLiveVoice()
     }
     return
   }
@@ -3888,10 +3918,88 @@ function handleCodexLiveVoiceEvent(event: CodexLiveVoiceEvent): void {
   // explicit stop path marks the client stopped before closing the transport.
 }
 
+function clearMikoSilenceTimer(): void {
+  mikoVoiceFlow.clearSilenceTimer()
+}
+
+function scheduleMikoSilenceTimeout(): void {
+  const api = mikoDesktopApi()
+  if (!api || !codexLiveVoiceClient) return
+  const generation = mikoVoiceFlow.beginAssistantTurn()
+  if (generation === null) return
+  void api.getStatus?.().then((status: any) => {
+    if (!codexLiveVoiceClient) return
+    const seconds = Math.max(15, Math.min(300, Number(status?.settings?.silenceTimeoutSeconds) || 60))
+    mikoVoiceFlow.assistantFinished(seconds * 1_000, generation)
+  }).catch(() => {
+    if (!codexLiveVoiceClient) return
+    mikoVoiceFlow.assistantFinished(60_000, generation)
+  })
+}
+
+function mikoDesktopApi(): any | null {
+  if (typeof window === 'undefined') return null
+  return (window as any).homerailMiko || null
+}
+
+function setupMikoDesktopBridge(): void {
+  const api = mikoDesktopApi()
+  if (!api?.onEvent) return
+  mikoDesktopUnsubscribe = api.onEvent((event: any) => {
+    if (event?.type === 'status') {
+      const deviceId = event.status?.settings?.inputDevice?.browserDeviceId
+      if (typeof deviceId === 'string' && deviceId) saveVoiceAudioInputDeviceId(deviceId)
+    }
+    if (event?.type === 'kws' && event.event?.type === 'wake') void startMikoLiveConversation()
+    if (event?.type === 'live-input-lease-expired') {
+      mikoLiveSessionController.stopHeartbeat()
+      error.value = 'GPT Live 麦克风会话失去确认，已暂停监听，请重新唤醒'
+      void stopCodexLiveVoice(false)
+    }
+    if (event?.type === 'runtime-error' && typeof event.message === 'string') {
+      error.value = event.message
+    }
+    if (event?.type === 'conversation-end-requested') {
+      if (!mikoVoiceFlow.requestEnd('menu')) void stopCodexLiveVoice()
+    }
+  })
+  void api.getStatus?.().then((status: any) => {
+    const deviceId = status?.settings?.inputDevice?.browserDeviceId
+    if (typeof deviceId === 'string' && deviceId) saveVoiceAudioInputDeviceId(deviceId)
+  }).catch(() => undefined)
+}
+
+async function startMikoLiveConversation(): Promise<void> {
+  if (mikoWakeStartPromise) return mikoWakeStartPromise
+  if (!mikoVoiceFlow.beginWake()) return
+  mikoWakeStartPromise = (async () => {
+    const api = mikoDesktopApi()
+    const status = await api?.getStatus?.()
+    const deviceId = status?.settings?.inputDevice?.browserDeviceId
+    if (typeof deviceId === 'string' && deviceId) saveVoiceAudioInputDeviceId(deviceId)
+    await api?.pauseWakeListening?.()
+    if (!workspace.value) await startSession()
+    if (!codexLiveVoiceEffective.value) throw new Error('GPT Live 尚未完成配置')
+    await startCodexLiveVoice()
+    if (!codexLiveVoiceClient) throw new Error('GPT Live 未能建立连接')
+  })().catch(err => {
+    error.value = err instanceof Error ? err.message : String(err)
+    mikoVoiceFlow.end()
+    void mikoDesktopApi()?.endConversation?.().catch(() => undefined)
+  }).finally(() => {
+    mikoWakeStartPromise = null
+  })
+  return mikoWakeStartPromise
+}
+
 async function startCodexLiveVoice(): Promise<void> {
   const sessionId = workspace.value?.session_id
   if (!sessionId || !codexLiveVoiceEffective.value) return
   if (codexLiveVoiceClient) await stopCodexLiveVoice(false)
+  mikoVoiceFlow.beginConnecting()
+  // Release the local wake-word stream before Chromium requests the live input.
+  await mikoLiveSessionController.prepareInput()
+  clearMikoSilenceTimer()
   closeVoiceInputAfterSubmit()
   voiceTurnAbort?.abort()
   voiceTurnAbort = null
@@ -3915,22 +4023,31 @@ async function startCodexLiveVoice(): Promise<void> {
   codexLiveVoiceClient = client
   try {
     await client.start()
+    await mikoLiveSessionController.activate()
+    mikoVoiceFlow.connected()
   } catch (err: any) {
     if (codexLiveVoiceClient !== client) return
     codexLiveVoiceClient = null
+    await client.stop(false).catch(() => undefined)
+    await mikoLiveSessionController.deactivate(false).catch(() => undefined)
     stopCodexLiveVoiceMeter()
+    mikoVoiceFlow.fatalError()
     applyCodexLiveVoiceState('error')
     error.value = err?.message || t('voice.liveVoice.error')
+    void mikoDesktopApi()?.endConversation?.().catch(() => undefined)
   }
 }
 
 async function stopCodexLiveVoice(notifyServer = true): Promise<void> {
+  clearMikoSilenceTimer()
   const client = codexLiveVoiceClient
   codexLiveVoiceClient = null
   if (client) await client.stop(notifyServer).catch(() => undefined)
+  await mikoLiveSessionController.deactivate(notifyServer).catch(() => undefined)
   stopCodexLiveVoiceMeter()
   codexLiveVoiceMuted.value = false
   applyCodexLiveVoiceState('idle')
+  mikoVoiceFlow.end()
   liveTranscript.value = ''
 }
 

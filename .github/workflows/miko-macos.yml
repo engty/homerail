@@ -1,0 +1,125 @@
+name: HomeRail Miko macOS
+
+on:
+  pull_request:
+    paths:
+      - "homerail_macos/**"
+      - "agent-ui/**"
+      - "scripts/prepare-runtime.mjs"
+      - ".github/workflows/miko-macos.yml"
+  push:
+    branches:
+      - main
+      - "codex/**"
+    tags:
+      - "miko-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: miko-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RELEASE_NODE_VERSION: "24.18.0"
+
+jobs:
+  build:
+    name: Build unsigned arm64 App
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Verify Apple Silicon runner
+        run: test "$(uname -m)" = "arm64"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.RELEASE_NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: homerail_macos/package-lock.json
+
+      - name: Install HomeRail runtime dependencies
+        run: npm run install:all
+
+      - name: Install macOS shell dependencies
+        # sherpa-onnx-node 1.13.4 advertises an unavailable darwin-x64
+        # optional package. The arm64 package is pinned as a direct dependency,
+        # so omit platform optionals and avoid npm trying to resolve x64.
+        run: npm --prefix homerail_macos install --package-lock=false --omit=optional --no-audit --no-fund
+
+      - name: Typecheck and test macOS shell
+        run: |
+          npm --prefix homerail_macos run typecheck
+          npm --prefix homerail_macos test
+
+      - name: Typecheck Agent UI
+        run: npm --prefix agent-ui run typecheck
+
+      - name: Build DMG and ZIP
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm --prefix homerail_macos run dist:ci
+
+      - name: Verify packaged runtime
+        working-directory: homerail_macos
+        run: |
+          app="dist-electron/mac-arm64/HomeRail Miko.app"
+          runtime="$app/Contents/Resources/homerail-runtime"
+          test -x "$runtime/node/bin/node"
+          test -x "$runtime/codex/bin/codex"
+          "$runtime/codex/bin/codex" --version | grep -F "0.146.0"
+          "$runtime/codex/bin/codex" features list | grep -F "realtime_conversation"
+          printf '%s\n' '{"protocol":1,"generation":1,"type":"list-devices"}' |
+            "$runtime/node/bin/node" "$app/Contents/Resources/miko-kws/kws-sidecar.js" |
+            grep -F '"type":"devices"'
+
+      - name: Smoke packaged Electron lifecycle
+        working-directory: homerail_macos
+        env:
+          HOMERAIL_MIKO_MANAGER_PORT: "29491"
+          HOMERAIL_MIKO_UI_HTTPS_PORT: "29492"
+          HOMERAIL_MIKO_UI_HTTP_PORT: "29493"
+        run: node scripts/packaged-lifecycle-smoke.mjs "dist-electron/mac-arm64/HomeRail Miko.app/Contents/MacOS/HomeRail Miko"
+
+      - name: Write SHA-256 checksums
+        working-directory: homerail_macos/dist-electron
+        run: |
+          shasum -a 256 HomeRail-Miko-*.dmg HomeRail-Miko-*.zip > SHA256SUMS-arm64.txt
+
+      - name: Upload App artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: homerail-miko-macos-arm64-${{ github.sha }}
+          path: |
+            homerail_macos/dist-electron/*.dmg
+            homerail_macos/dist-electron/*.zip
+            homerail_macos/dist-electron/SHA256SUMS-arm64.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish tagged prerelease
+    if: startsWith(github.ref, 'refs/tags/miko-v')
+    needs: build
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - name: Download App artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: homerail-miko-macos-arm64-${{ github.sha }}
+          path: release-assets
+
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release-assets/* --prerelease --generate-notes --title "HomeRail Miko $GITHUB_REF_NAME"
